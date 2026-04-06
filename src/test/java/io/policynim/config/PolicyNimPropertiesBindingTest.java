@@ -18,6 +18,7 @@ class PolicyNimPropertiesBindingTest {
                 "policynim.mcp.host=0.0.0.0",
                 "policynim.mcp.port=9090",
                 "policynim.mcp.streamable-http-path=/custom-mcp",
+                "policynim.mcp.public-base-url=https://example.com/platform/",
                 "policynim.storage.table-name=bootstrap_chunks"
             )
             .run(context -> {
@@ -26,7 +27,15 @@ class PolicyNimPropertiesBindingTest {
                 assertThat(properties.getMcp().getHost()).isEqualTo("0.0.0.0");
                 assertThat(properties.getMcp().getPort()).isEqualTo(9090);
                 assertThat(properties.getMcp().getStreamableHttpPath()).isEqualTo("/custom-mcp");
+                assertThat(properties.getMcp().mcpUrl()).isEqualTo("https://example.com/platform/custom-mcp");
                 assertThat(properties.getStorage().getTableName()).isEqualTo("bootstrap_chunks");
             });
+    }
+
+    @Test
+    void rejectsStreamableHttpPathsWithoutLeadingSlash() {
+        contextRunner
+            .withPropertyValues("policynim.mcp.streamable-http-path=custom-mcp")
+            .run(context -> assertThat(context.getStartupFailure()).isNotNull());
     }
 }
