@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: PolicyNim
+
+policynim:
+  mcp:
+    name: PolicyNIM
+    transport: streamable-http
+    host: 127.0.0.1
+    port: 8080
+    streamable-http-path: /mcp
+  storage:
+    table-name: policy_chunks
