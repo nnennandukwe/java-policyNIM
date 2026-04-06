@@ -8,6 +8,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,8 +20,14 @@ class McpHttpPlaceholderControllerTests {
     private MockMvc mockMvc;
 
     @Test
-    void returnsNotImplementedForGetRequests() throws Exception {
+    void rejectsAnonymousGetRequests() throws Exception {
         mockMvc.perform(get("/mcp"))
+            .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void returnsNotImplementedForAuthenticatedGetRequests() throws Exception {
+        mockMvc.perform(get("/mcp").with(user("bootstrap")))
             .andExpect(status().isNotImplemented())
             .andExpect(jsonPath("$.server").value("PolicyNIM"))
             .andExpect(jsonPath("$.transport").value("streamable-http"))
@@ -28,8 +35,8 @@ class McpHttpPlaceholderControllerTests {
     }
 
     @Test
-    void returnsNotImplementedForPostRequests() throws Exception {
-        mockMvc.perform(post("/mcp"))
+    void returnsNotImplementedForAuthenticatedPostRequests() throws Exception {
+        mockMvc.perform(post("/mcp").with(user("bootstrap")))
             .andExpect(status().isNotImplemented())
             .andExpect(jsonPath("$.reason").value("MCP HTTP transport is bootstrapped. Tool registration lands in later PRs."));
     }

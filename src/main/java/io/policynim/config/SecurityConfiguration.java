@@ -15,7 +15,7 @@ public class SecurityConfiguration {
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/healthz").permitAll()
-                .anyRequest().permitAll()
+                .anyRequest().authenticated()
             )
             .httpBasic(Customizer.withDefaults())
             .build();
