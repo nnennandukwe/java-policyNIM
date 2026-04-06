@@ -9,4 +9,4 @@ This repository is being built as a Qodo-reviewed PR train, starting with a host
 - public readiness checks on `/healthz`
 - test-first package boundaries and contributor workflow
 
-The detailed implementation roadmap lives in [`.implementation-plan.md`](.implementation-plan.md).
+Contributor workflow notes for the current bootstrap slice live in [`docs/contributor-workflow.md`](docs/contributor-workflow.md).
