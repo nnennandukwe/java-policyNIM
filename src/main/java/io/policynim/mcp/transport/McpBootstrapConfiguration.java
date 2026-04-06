@@ -1,5 +1,6 @@
 package io.policynim.mcp.transport;
 
+import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;

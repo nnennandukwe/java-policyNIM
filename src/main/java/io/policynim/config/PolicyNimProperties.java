@@ -1,6 +1,4 @@
 package io.policynim.config;
-
-import io.policynim.mcp.transport.McpTransport;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

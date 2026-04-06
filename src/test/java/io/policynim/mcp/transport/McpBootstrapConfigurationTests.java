@@ -1,5 +1,6 @@
 package io.policynim.mcp.transport;
 
+import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;

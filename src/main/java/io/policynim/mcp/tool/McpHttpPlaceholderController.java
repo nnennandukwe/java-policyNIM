@@ -1,7 +1,7 @@
 package io.policynim.mcp.tool;
 
+import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
-import io.policynim.mcp.transport.McpTransport;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

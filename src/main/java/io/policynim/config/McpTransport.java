@@ -1,4 +1,4 @@
-package io.policynim.mcp.transport;
+package io.policynim.config;
 
 public enum McpTransport {
     STDIO("stdio"),
