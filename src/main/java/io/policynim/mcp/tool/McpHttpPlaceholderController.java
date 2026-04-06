@@ -2,15 +2,16 @@ package io.policynim.mcp.tool;
 
 import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import io.policynim.mcp.transport.StreamableHttpTransportMarker;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody;
 
-@RestController
-@ConditionalOnProperty(name = "policynim.mcp.transport", havingValue = "streamable-http", matchIfMissing = true)
+@Controller
+@ResponseBody
 @RequestMapping("${policynim.mcp.streamable-http-path:/mcp}")
 public class McpHttpPlaceholderController {
 
@@ -18,9 +19,14 @@ public class McpHttpPlaceholderController {
         "MCP HTTP transport is bootstrapped. Tool registration lands in later PRs.";
 
     private final PolicyNimProperties properties;
+    private final StreamableHttpTransportMarker transportMarker;
 
-    public McpHttpPlaceholderController(PolicyNimProperties properties) {
+    public McpHttpPlaceholderController(
+        PolicyNimProperties properties,
+        StreamableHttpTransportMarker transportMarker
+    ) {
         this.properties = properties;
+        this.transportMarker = transportMarker;
     }
 
     @RequestMapping(method = {RequestMethod.GET, RequestMethod.POST})
@@ -29,7 +35,7 @@ public class McpHttpPlaceholderController {
             new McpPlaceholderResponse(
                 properties.getMcp().getName(),
                 McpTransport.STREAMABLE_HTTP.configValue(),
-                properties.getMcp().getStreamableHttpPath(),
+                transportMarker.path(),
                 PLACEHOLDER_REASON
             )
         );

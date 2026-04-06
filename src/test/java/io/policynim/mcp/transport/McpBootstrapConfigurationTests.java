@@ -19,6 +19,7 @@ class McpBootstrapConfigurationTests {
         contextRunner.run(context -> {
             McpServerBootstrap bootstrap = context.getBean(McpServerBootstrap.class);
             assertThat(bootstrap.transport()).isEqualTo(McpTransport.STREAMABLE_HTTP);
+            assertThat(context).hasSingleBean(StreamableHttpTransportMarker.class);
         });
     }
 
@@ -30,6 +31,7 @@ class McpBootstrapConfigurationTests {
                 McpServerBootstrap bootstrap = context.getBean(McpServerBootstrap.class);
                 assertThat(bootstrap.transport()).isEqualTo(McpTransport.STDIO);
                 assertThat(bootstrap.description()).contains("stdio");
+                assertThat(context).doesNotHaveBean(StreamableHttpTransportMarker.class);
             });
     }
 
