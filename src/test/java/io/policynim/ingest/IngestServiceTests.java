@@ -139,6 +139,43 @@ class IngestServiceTests {
             .hasMessageContaining("must not be a filesystem root path");
     }
 
+    @Test
+    void ignoresMarkdownFilesBeyondConfiguredTraversalDepth() throws IOException {
+        Path policiesDir = tempDir.resolve("policies");
+        writePolicy(
+            policiesDir.resolve("backend/logging.md"),
+            """
+                ---
+                policy_id: BACKEND-LOG-001
+                ---
+                # Logging
+
+                ## Rules
+
+                Log with context.
+                """
+        );
+        writePolicy(
+            policiesDir.resolve("backend/team/archive/ignored.md"),
+            """
+                ---
+                policy_id: IGNORED-001
+                ---
+                # Ignored
+                """
+        );
+
+        IngestService service = new IngestService(
+            new FileSystemPolicyCorpus(new MarkdownPolicyParser()),
+            new PolicyChunker()
+        );
+
+        IngestedPolicyCorpus result = service.ingest(new IngestCommand(policiesDir));
+
+        assertThat(result.documents()).extracting(document -> document.metadata().policyId())
+            .containsExactly("BACKEND-LOG-001");
+    }
+
     private static void writePolicy(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content.stripLeading());
