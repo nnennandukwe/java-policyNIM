@@ -100,6 +100,45 @@ class IngestServiceTests {
             .hasMessageContaining("Duplicate effective policy_id");
     }
 
+    @Test
+    void rejectsMissingCorpusRoot() {
+        IngestService service = new IngestService(
+            new FileSystemPolicyCorpus(new MarkdownPolicyParser()),
+            new PolicyChunker()
+        );
+
+        assertThatThrownBy(() -> service.ingest(new IngestCommand(tempDir.resolve("missing-policies"))))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageContaining("does not exist");
+    }
+
+    @Test
+    void rejectsNonDirectoryCorpusRoot() throws IOException {
+        Path file = tempDir.resolve("policies.txt");
+        Files.writeString(file, "not a directory");
+
+        IngestService service = new IngestService(
+            new FileSystemPolicyCorpus(new MarkdownPolicyParser()),
+            new PolicyChunker()
+        );
+
+        assertThatThrownBy(() -> service.ingest(new IngestCommand(file)))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageContaining("must be a directory");
+    }
+
+    @Test
+    void rejectsFilesystemRootAsCorpusRoot() {
+        IngestService service = new IngestService(
+            new FileSystemPolicyCorpus(new MarkdownPolicyParser()),
+            new PolicyChunker()
+        );
+
+        assertThatThrownBy(() -> service.ingest(new IngestCommand(tempDir.getRoot())))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageContaining("must not be a filesystem root path");
+    }
+
     private static void writePolicy(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content.stripLeading());

@@ -25,12 +25,13 @@ public class FileSystemPolicyCorpus implements PolicyCorpus {
 
     @Override
     public List<ParsedPolicyDocument> load(Path corpusRoot) {
+        String sourcePrefix = validateCorpusRoot(corpusRoot);
         List<Path> markdownFiles = listMarkdownFiles(corpusRoot);
         List<ParsedPolicyDocument> documents = new ArrayList<>();
         Map<String, String> seenPolicyIds = new HashMap<>();
 
         for (Path path : markdownFiles) {
-            String sourcePath = normalizeSourcePath(corpusRoot, path);
+            String sourcePath = normalizeSourcePath(sourcePrefix, corpusRoot, path);
             String text;
             try {
                 text = Files.readString(path);
@@ -52,6 +53,25 @@ public class FileSystemPolicyCorpus implements PolicyCorpus {
         return List.copyOf(documents);
     }
 
+    private static String validateCorpusRoot(Path corpusRoot) {
+        if (!Files.exists(corpusRoot)) {
+            throw new InvalidPolicyDocumentException(
+                "Policy corpus root %s does not exist.".formatted(corpusRoot)
+            );
+        }
+        if (!Files.isDirectory(corpusRoot)) {
+            throw new InvalidPolicyDocumentException(
+                "Policy corpus root %s must be a directory.".formatted(corpusRoot)
+            );
+        }
+        if (corpusRoot.getFileName() == null) {
+            throw new InvalidPolicyDocumentException(
+                "Policy corpus root %s must not be a filesystem root path.".formatted(corpusRoot)
+            );
+        }
+        return corpusRoot.getFileName().toString();
+    }
+
     private static List<Path> listMarkdownFiles(Path corpusRoot) {
         try (Stream<Path> paths = Files.walk(corpusRoot)) {
             return paths
@@ -64,8 +84,8 @@ public class FileSystemPolicyCorpus implements PolicyCorpus {
         }
     }
 
-    private static String normalizeSourcePath(Path corpusRoot, Path file) {
+    private static String normalizeSourcePath(String sourcePrefix, Path corpusRoot, Path file) {
         String relative = corpusRoot.relativize(file).toString().replace('\\', '/');
-        return corpusRoot.getFileName().toString() + "/" + relative;
+        return sourcePrefix + "/" + relative;
     }
 }
