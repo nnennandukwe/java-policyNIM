@@ -111,8 +111,23 @@ public class PolicyNimProperties {
 
     public static final class StorageProperties {
 
+        @NotNull
+        private StorageMode mode = StorageMode.NOOP;
+
         @NotBlank
+        @Pattern(
+            regexp = "^[A-Za-z_][A-Za-z0-9_]*$",
+            message = "table-name must be a simple SQL identifier"
+        )
         private String tableName = "policy_chunks";
+
+        public StorageMode getMode() {
+            return mode;
+        }
+
+        public void setMode(StorageMode mode) {
+            this.mode = mode;
+        }
 
         public String getTableName() {
             return tableName;
@@ -121,5 +136,10 @@ public class PolicyNimProperties {
         public void setTableName(String tableName) {
             this.tableName = tableName;
         }
+    }
+
+    public enum StorageMode {
+        NOOP,
+        JDBC
     }
 }

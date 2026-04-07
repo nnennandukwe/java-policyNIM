@@ -1,6 +1,7 @@
 package io.policynim;
 
 import io.policynim.config.PolicyNimProperties;
+import io.policynim.ingest.IngestService;
 import io.policynim.mcp.transport.McpServerBootstrap;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,9 +18,14 @@ class PolicyNimApplicationTests {
     @Autowired
     private McpServerBootstrap bootstrap;
 
+    @Autowired
+    private IngestService ingestService;
+
     @Test
     void contextLoads() {
         assertThat(properties.getMcp().getName()).isEqualTo("PolicyNIM");
+        assertThat(properties.getStorage().getMode()).isEqualTo(PolicyNimProperties.StorageMode.NOOP);
         assertThat(bootstrap.transport().configValue()).isEqualTo("streamable-http");
+        assertThat(ingestService).isNotNull();
     }
 }

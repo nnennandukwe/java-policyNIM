@@ -1,6 +1,9 @@
 spring:
   application:
     name: PolicyNim
+  flyway:
+    placeholders:
+      tableName: ${policynim.storage.table-name}
 
 policynim:
   mcp:
@@ -10,4 +13,5 @@ policynim:
     port: 8080
     streamable-http-path: /mcp
   storage:
+    mode: noop
     table-name: policy_chunks

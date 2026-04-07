@@ -176,8 +176,46 @@ class IngestServiceTests {
             .containsExactly("BACKEND-LOG-001");
     }
 
+    @Test
+    void persistsTheIngestedCorpusThroughTheConfiguredStore() throws IOException {
+        Path policiesDir = tempDir.resolve("policies");
+        writePolicy(
+            policiesDir.resolve("backend/logging.md"),
+            """
+                ---
+                policy_id: BACKEND-LOG-001
+                ---
+                # Logging
+
+                ## Rules
+
+                Log with context.
+                """
+        );
+        RecordingPolicyChunkStore store = new RecordingPolicyChunkStore();
+        IngestService service = new IngestService(
+            new FileSystemPolicyCorpus(new MarkdownPolicyParser()),
+            new PolicyChunker(),
+            store
+        );
+
+        IngestedPolicyCorpus result = service.ingest(new IngestCommand(policiesDir));
+
+        assertThat(store.storedCorpus).usingRecursiveComparison().isEqualTo(result);
+    }
+
     private static void writePolicy(Path path, String content) throws IOException {
         Files.createDirectories(path.getParent());
         Files.writeString(path, content.stripLeading());
+    }
+
+    private static final class RecordingPolicyChunkStore implements PolicyChunkStore {
+
+        private IngestedPolicyCorpus storedCorpus;
+
+        @Override
+        public void replaceAll(IngestedPolicyCorpus corpus) {
+            this.storedCorpus = corpus;
+        }
     }
 }
