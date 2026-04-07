@@ -2,6 +2,7 @@ package io.policynim.persistence.jdbc;
 
 import io.policynim.config.PolicyNimProperties;
 import io.policynim.ingest.PolicyChunkStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -9,6 +10,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(prefix = "policynim.storage", name = "mode", havingValue = "jdbc")
 public class JdbcPersistenceConfiguration {
 
     @Bean

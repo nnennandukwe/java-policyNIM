@@ -1,4 +1,15 @@
-CREATE EXTENSION IF NOT EXISTS vector;
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS vector;
+EXCEPTION
+    WHEN insufficient_privilege THEN
+        RAISE EXCEPTION
+            'PolicyNIM requires the "vector" extension. Install pgvector and enable the extension before running with policynim.storage.mode=jdbc.';
+    WHEN undefined_file THEN
+        RAISE EXCEPTION
+            'PolicyNIM requires the "vector" extension. Install the pgvector package on the PostgreSQL server before running with policynim.storage.mode=jdbc.';
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS ${tableName} (
     chunk_id TEXT PRIMARY KEY,

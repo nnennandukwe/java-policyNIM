@@ -21,7 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest
+@SpringBootTest(properties = "policynim.storage.mode=jdbc")
 @Import(PostgresTestContainerConfiguration.class)
 class JdbcPolicyChunkStoreIT {
 
