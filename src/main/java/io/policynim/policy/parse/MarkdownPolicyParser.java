@@ -2,7 +2,9 @@ package io.policynim.policy.parse;
 
 import io.policynim.policy.model.ParsedPolicyDocument;
 import io.policynim.policy.model.PolicyMetadata;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.yaml.snakeyaml.error.YAMLException;
 
 import java.util.ArrayList;
@@ -20,7 +22,7 @@ public class MarkdownPolicyParser implements PolicyParser {
     private static final Pattern ATX_HEADING = Pattern.compile("^( {0,3})(#{1,6})(?:[ \\t]+|$)(.*)$");
     private static final String FRONTMATTER_DELIMITER = "---";
 
-    private final Yaml yaml = new Yaml();
+    private final Yaml yaml = new Yaml(new SafeConstructor(loaderOptions()));
 
     @Override
     public ParsedPolicyDocument parse(String sourcePath, String text) {
@@ -171,7 +173,8 @@ public class MarkdownPolicyParser implements PolicyParser {
             );
         }
 
-        if (!(loaded instanceof Map<?, ?> mapping)) {
+        Object normalizedValue = normalizeYamlValue(loaded);
+        if (!(normalizedValue instanceof Map<?, ?> mapping)) {
             throw new InvalidPolicyDocumentException(
                 "Policy document %s has malformed YAML frontmatter.".formatted(sourcePath)
             );
@@ -182,6 +185,40 @@ public class MarkdownPolicyParser implements PolicyParser {
             normalized.put(String.valueOf(entry.getKey()), entry.getValue());
         }
         return normalized;
+    }
+
+    private static LoaderOptions loaderOptions() {
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        options.setAllowRecursiveKeys(false);
+        options.setMaxAliasesForCollections(20);
+        options.setNestingDepthLimit(50);
+        options.setCodePointLimit(1_000_000);
+        return options;
+    }
+
+    private static Object normalizeYamlValue(Object value) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
+            return value;
+        }
+        if (value instanceof Map<?, ?> mapping) {
+            Map<String, Object> normalized = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : mapping.entrySet()) {
+                normalized.put(String.valueOf(entry.getKey()), normalizeYamlValue(entry.getValue()));
+            }
+            return normalized;
+        }
+        if (value instanceof Collection<?> values) {
+            List<Object> normalized = new ArrayList<>();
+            for (Object item : values) {
+                normalized.add(normalizeYamlValue(item));
+            }
+            return List.copyOf(normalized);
+        }
+
+        throw new InvalidPolicyDocumentException(
+            "Policy frontmatter contains unsupported YAML value type: " + value.getClass().getName()
+        );
     }
 
     private static String firstHeadingTitle(List<HeadingEvent> headings, Integer level) {

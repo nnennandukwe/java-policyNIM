@@ -77,4 +77,18 @@ class MarkdownPolicyParserTests {
             .isInstanceOf(InvalidPolicyDocumentException.class)
             .hasMessageContaining("malformed YAML frontmatter");
     }
+
+    @Test
+    void rejectsCustomTaggedYamlValues() {
+        assertThatThrownBy(() -> parser.parse(
+            "policies/backend/tagged.md",
+            """
+                ---
+                title: !!javax.script.ScriptEngineManager []
+                ---
+                # Tagged
+                """
+        ))
+            .isInstanceOf(InvalidPolicyDocumentException.class);
+    }
 }
