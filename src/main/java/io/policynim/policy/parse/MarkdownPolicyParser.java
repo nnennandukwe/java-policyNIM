@@ -26,7 +26,7 @@ public class MarkdownPolicyParser implements PolicyParser {
 
     @Override
     public ParsedPolicyDocument parse(String sourcePath, String text) {
-        String normalizedText = normalizeNewlines(text).stripLeading();
+        String normalizedText = normalizeNewlines(text);
         if (normalizedText.startsWith("\uFEFF")) {
             normalizedText = normalizedText.substring(1);
         }
@@ -135,12 +135,21 @@ public class MarkdownPolicyParser implements PolicyParser {
 
     private FrontmatterSplit splitFrontmatter(String sourcePath, String text) {
         List<String> lines = linesOf(text);
-        if (lines.isEmpty() || !FRONTMATTER_DELIMITER.equals(lines.getFirst().trim())) {
+        if (lines.isEmpty()) {
+            return new FrontmatterSplit(Map.of(), text, 1);
+        }
+
+        int frontmatterStart = 0;
+        while (frontmatterStart < lines.size() && lines.get(frontmatterStart).isBlank()) {
+            frontmatterStart++;
+        }
+        if (frontmatterStart >= lines.size()
+            || !FRONTMATTER_DELIMITER.equals(lines.get(frontmatterStart).trim())) {
             return new FrontmatterSplit(Map.of(), text, 1);
         }
 
         int closingIndex = -1;
-        for (int index = 1; index < lines.size(); index++) {
+        for (int index = frontmatterStart + 1; index < lines.size(); index++) {
             String line = lines.get(index).trim();
             if (FRONTMATTER_DELIMITER.equals(line) || "...".equals(line)) {
                 closingIndex = index;
@@ -153,7 +162,7 @@ public class MarkdownPolicyParser implements PolicyParser {
             );
         }
 
-        String rawFrontmatter = String.join("\n", lines.subList(1, closingIndex));
+        String rawFrontmatter = String.join("\n", lines.subList(frontmatterStart + 1, closingIndex));
         String body = String.join("\n", lines.subList(closingIndex + 1, lines.size()));
         return new FrontmatterSplit(parseFrontmatter(sourcePath, rawFrontmatter), body, closingIndex + 2);
     }

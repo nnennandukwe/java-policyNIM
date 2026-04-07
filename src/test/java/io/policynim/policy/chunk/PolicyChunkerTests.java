@@ -17,7 +17,8 @@ class PolicyChunkerTests {
     void buildsDeterministicChunkIdsForRepeatedHeadings() {
         ParsedPolicyDocument document = parser.parse(
             "policies/backend/deterministic.md",
-            """
+            markdown(
+                """
                 ---
                 policy_id: BE-CHUNK-001
                 title: Chunk Policy
@@ -34,6 +35,7 @@ class PolicyChunkerTests {
 
                 - second
                 """
+            )
         );
 
         List<String> firstRun = chunker.chunk(document, parser).stream()
@@ -55,7 +57,8 @@ class PolicyChunkerTests {
     void preservesPreambleAndIgnoresHeadingsInsideCodeFences() {
         ParsedPolicyDocument document = parser.parse(
             "policies/backend/structure.md",
-            """
+            markdown(
+                """
                 Intro text before headings.
 
                 More setup context.
@@ -74,6 +77,7 @@ class PolicyChunkerTests {
 
                 Handle retries carefully.
                 """
+            )
         );
 
         List<PolicyChunk> chunks = chunker.chunk(document, parser);
@@ -87,5 +91,9 @@ class PolicyChunkerTests {
         assertThat(chunks).extracting(PolicyChunk::lines).containsExactly("1-4", "5-6", "7-14", "15-17");
         assertThat(chunks.get(2).text()).contains("# not-a-heading");
         assertThat(chunks.get(2).section()).doesNotContain("not-a-heading");
+    }
+
+    private static String markdown(String value) {
+        return value.stripLeading();
     }
 }

@@ -14,7 +14,8 @@ class MarkdownPolicyParserTests {
     void parsesFrontmatterAndNormalizesMetadata() {
         ParsedPolicyDocument document = parser.parse(
             "policies/backend/perfect.md",
-            """
+            markdown(
+                """
                 ---
                 policy_id: BE-DEMO-001
                 title: Perfect Policy
@@ -31,6 +32,7 @@ class MarkdownPolicyParserTests {
 
                 Keep the service safe.
                 """
+            )
         );
 
         assertThat(document.sourcePath()).isEqualTo("policies/backend/perfect.md");
@@ -46,13 +48,15 @@ class MarkdownPolicyParserTests {
     void infersMetadataFromPathAndHeadingWhenFrontmatterIsMissing() {
         ParsedPolicyDocument document = parser.parse(
             "policies/security/session-boundaries.md",
-            """
+            markdown(
+                """
                 # Session Boundaries
 
                 ## Intent
 
                 Tokens must expire cleanly.
                 """
+            )
         );
 
         assertThat(document.metadata().title()).isEqualTo("Session Boundaries");
@@ -67,12 +71,14 @@ class MarkdownPolicyParserTests {
     void rejectsMalformedFrontmatter() {
         assertThatThrownBy(() -> parser.parse(
             "policies/backend/broken.md",
-            """
+            markdown(
+                """
                 ---
                 title Broken
                 ---
                 # Broken
                 """
+            )
         ))
             .isInstanceOf(InvalidPolicyDocumentException.class)
             .hasMessageContaining("malformed YAML frontmatter");
@@ -82,13 +88,31 @@ class MarkdownPolicyParserTests {
     void rejectsCustomTaggedYamlValues() {
         assertThatThrownBy(() -> parser.parse(
             "policies/backend/tagged.md",
-            """
+            markdown(
+                """
                 ---
                 title: !!javax.script.ScriptEngineManager []
                 ---
                 # Tagged
                 """
+            )
         ))
             .isInstanceOf(InvalidPolicyDocumentException.class);
+    }
+
+    @Test
+    void preservesOriginalLineOffsetsWhenBlankLinesPrecedeFrontmatter() {
+        ParsedPolicyDocument document = parser.parse(
+            "policies/backend/offsets.md",
+            "\n\n---\npolicy_id: BE-OFFSET-001\n---\n# Offset Policy\n\n## Rules\n\nKeep source line numbers stable.\n"
+        );
+
+        assertThat(parser.extractSections(document))
+            .extracting(section -> section.startLine() + "-" + section.endLine())
+            .containsExactly("6-7", "8-10");
+    }
+
+    private static String markdown(String value) {
+        return value.stripLeading();
     }
 }
