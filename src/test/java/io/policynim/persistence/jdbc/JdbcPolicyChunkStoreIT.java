@@ -3,11 +3,15 @@ package io.policynim.persistence.jdbc;
 import com.pgvector.PGvector;
 import io.policynim.ingest.IngestCommand;
 import io.policynim.ingest.IngestService;
+import io.policynim.provider.EmbeddingInputType;
+import io.policynim.provider.PolicyEmbeddingModel;
 import io.policynim.support.PostgresTestContainerConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -91,6 +95,30 @@ class JdbcPolicyChunkStoreIT {
     }
 
     @Test
+    void ingestsPoliciesWithEmbeddingsWhenAnEmbeddingModelIsConfigured() throws IOException {
+        Path policiesDir = tempDir.resolve("policies");
+        writePolicy(
+            policiesDir.resolve("backend/logging.md"),
+            """
+                ---
+                policy_id: BACKEND-LOG-001
+                ---
+                # Logging
+
+                Add request ids.
+                """
+        );
+
+        ingestService.ingest(new IngestCommand(policiesDir));
+
+        assertThat(jdbcTemplate.queryForObject(
+            "select embedding::text from %s where chunk_id = ?".formatted(TABLE_NAME),
+            String.class,
+            "BACKEND-LOG-001:logging"
+        )).isEqualTo("[11,12,13]");
+    }
+
+    @Test
     void ingestsPoliciesIntoPostgresWithChunkMetadata() throws IOException {
         Path policiesDir = tempDir.resolve("policies");
         writePolicy(
@@ -131,7 +159,7 @@ class JdbcPolicyChunkStoreIT {
                 "backend",
                 List.of("observability", "audit"),
                 List.of("SOC2-CC7"),
-                true
+                false
             ),
             new StoredChunkRow(
                 "BACKEND-LOG-001:logging__rules",
@@ -149,7 +177,7 @@ class JdbcPolicyChunkStoreIT {
                 "backend",
                 List.of("observability", "audit"),
                 List.of("SOC2-CC7"),
-                true
+                false
             )
         );
     }
@@ -255,5 +283,21 @@ class JdbcPolicyChunkStoreIT {
         List<String> groundedIn,
         boolean embeddingIsNull
     ) {
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class EmbeddingTestConfiguration {
+
+        @Bean
+        PolicyEmbeddingModel policyEmbeddingModel() {
+            return new PolicyEmbeddingModel() {
+                @Override
+                public List<float[]> embed(List<String> inputs, EmbeddingInputType inputType) {
+                    return inputs.stream()
+                        .map(ignored -> new float[] {11.0f, 12.0f, 13.0f})
+                        .toList();
+                }
+            };
+        }
     }
 }

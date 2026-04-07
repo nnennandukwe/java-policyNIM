@@ -1,8 +1,11 @@
 package io.policynim.persistence.jdbc;
 
+import com.pgvector.PGvector;
 import io.policynim.ingest.IngestedPolicyCorpus;
 import io.policynim.ingest.PolicyChunkStore;
 import io.policynim.policy.chunk.PolicyChunk;
+import io.policynim.provider.EmbeddingInputType;
+import io.policynim.provider.PolicyEmbeddingModel;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionOperations;
@@ -24,13 +27,20 @@ final class JdbcPolicyChunkStore implements PolicyChunkStore {
     private final String tableName;
     private final String truncateSql;
     private final String insertSql;
+    private final PolicyEmbeddingModel embeddingModel;
 
-    JdbcPolicyChunkStore(JdbcTemplate jdbcTemplate, String tableName, TransactionOperations transactionOperations) {
+    JdbcPolicyChunkStore(
+        JdbcTemplate jdbcTemplate,
+        String tableName,
+        TransactionOperations transactionOperations,
+        PolicyEmbeddingModel embeddingModel
+    ) {
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
         this.transactionOperations = Objects.requireNonNull(
             transactionOperations,
             "transactionOperations must not be null"
         );
+        this.embeddingModel = Objects.requireNonNull(embeddingModel, "embeddingModel must not be null");
         this.tableName = validateTableName(tableName);
         this.truncateSql = "TRUNCATE TABLE " + this.tableName;
         this.insertSql =
@@ -50,6 +60,10 @@ final class JdbcPolicyChunkStore implements PolicyChunkStore {
             if (chunks.isEmpty()) {
                 return;
             }
+            List<float[]> embeddings = embeddingModel.embed(
+                chunks.stream().map(PolicyChunk::text).toList(),
+                EmbeddingInputType.PASSAGE
+            );
 
             jdbcTemplate.batchUpdate(insertSql, new BatchPreparedStatementSetter() {
                 @Override
@@ -66,7 +80,12 @@ final class JdbcPolicyChunkStore implements PolicyChunkStore {
                     statement.setString(9, chunk.policy().domain());
                     statement.setArray(10, textArray(statement, chunk.policy().tags()));
                     statement.setArray(11, textArray(statement, chunk.policy().groundedIn()));
-                    statement.setNull(12, Types.OTHER);
+                    if (index < embeddings.size()) {
+                        statement.setObject(12, new PGvector(embeddings.get(index)));
+                    }
+                    else {
+                        statement.setNull(12, Types.OTHER);
+                    }
                 }
 
                 @Override

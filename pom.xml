@@ -83,7 +83,6 @@
             <groupId>com.pgvector</groupId>
             <artifactId>pgvector</artifactId>
             <version>${pgvector-java.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>

@@ -14,11 +14,11 @@ public class McpBootstrapConfiguration {
         return switch (properties.getMcp().getTransport()) {
             case STDIO -> new SimpleMcpServerBootstrap(
                 McpTransport.STDIO,
-                "stdio bootstrap placeholder for server " + properties.getMcp().getName()
+                "stdio MCP server for " + properties.getMcp().getName()
             );
             case STREAMABLE_HTTP -> new SimpleMcpServerBootstrap(
                 McpTransport.STREAMABLE_HTTP,
-                "streamable-http bootstrap placeholder on " + properties.getMcp().getStreamableHttpPath()
+                "streamable-http MCP server on " + properties.getMcp().getStreamableHttpPath()
             );
         };
     }

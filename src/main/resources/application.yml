@@ -15,3 +15,9 @@ policynim:
   storage:
     mode: noop
     table-name: policy_chunks
+  provider:
+    nvidia:
+      enabled: false
+      base-url: https://ai.api.nvidia.com
+      embedding-model: nvidia/llama-3.2-nv-embedqa-1b-v2
+      rerank-model: nvidia/llama-nemotron-rerank-1b-v2
