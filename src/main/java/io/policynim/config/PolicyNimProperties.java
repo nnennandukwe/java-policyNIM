@@ -112,6 +112,10 @@ public class PolicyNimProperties {
     public static final class StorageProperties {
 
         @NotBlank
+        @Pattern(
+            regexp = "^[A-Za-z_][A-Za-z0-9_]*$",
+            message = "table-name must be a simple SQL identifier"
+        )
         private String tableName = "policy_chunks";
 
         public String getTableName() {

@@ -1,6 +1,9 @@
 spring:
   application:
     name: PolicyNim
+  flyway:
+    placeholders:
+      tableName: ${policynim.storage.table-name}
 
 policynim:
   mcp:

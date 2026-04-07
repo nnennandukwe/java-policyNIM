@@ -38,4 +38,11 @@ class PolicyNimPropertiesBindingTest {
             .withPropertyValues("policynim.mcp.streamable-http-path=custom-mcp")
             .run(context -> assertThat(context.getStartupFailure()).isNotNull());
     }
+
+    @Test
+    void rejectsUnsafeStorageTableNames() {
+        contextRunner
+            .withPropertyValues("policynim.storage.table-name=policy-chunks")
+            .run(context -> assertThat(context.getStartupFailure()).isNotNull());
+    }
 }
