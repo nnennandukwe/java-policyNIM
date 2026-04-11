@@ -33,6 +33,9 @@ public class PolicyNimProperties {
 
     public static final class McpProperties {
 
+        private static final int MIN_TOP_K = 1;
+        private static final int MAX_TOP_K = 20;
+
         @NotBlank
         private String name = "PolicyNIM";
 
@@ -49,6 +52,10 @@ public class PolicyNimProperties {
         @NotBlank
         @Pattern(regexp = "^/.*", message = "streamable-http-path must start with '/'")
         private String streamableHttpPath = "/mcp";
+
+        @Min(MIN_TOP_K)
+        @Max(MAX_TOP_K)
+        private int defaultTopK = 5;
 
         private URI publicBaseUrl;
 
@@ -90,6 +97,14 @@ public class PolicyNimProperties {
 
         public void setStreamableHttpPath(String streamableHttpPath) {
             this.streamableHttpPath = streamableHttpPath;
+        }
+
+        public int getDefaultTopK() {
+            return defaultTopK;
+        }
+
+        public void setDefaultTopK(int defaultTopK) {
+            this.defaultTopK = defaultTopK;
         }
 
         public URI getPublicBaseUrl() {

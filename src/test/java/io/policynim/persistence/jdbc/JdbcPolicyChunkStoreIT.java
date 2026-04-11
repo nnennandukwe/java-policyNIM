@@ -2,15 +2,25 @@ package io.policynim.persistence.jdbc;
 
 import com.pgvector.PGvector;
 import io.policynim.ingest.IngestCommand;
+import io.policynim.ingest.IngestedPolicyCorpus;
 import io.policynim.ingest.IngestService;
+import io.policynim.policy.chunk.PolicyChunk;
+import io.policynim.policy.model.PolicyMetadata;
+import io.policynim.provider.EmbeddingInputType;
+import io.policynim.provider.PolicyEmbeddingModel;
 import io.policynim.support.PostgresTestContainerConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.sql.DataSource;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,6 +30,7 @@ import java.sql.SQLException;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = "policynim.storage.mode=jdbc")
 @Import(PostgresTestContainerConfiguration.class)
@@ -32,6 +43,9 @@ class JdbcPolicyChunkStoreIT {
 
     @Autowired
     private IngestService ingestService;
+
+    @Autowired
+    private DataSource dataSource;
 
     @TempDir
     Path tempDir;
@@ -91,6 +105,30 @@ class JdbcPolicyChunkStoreIT {
     }
 
     @Test
+    void ingestsPoliciesWithEmbeddingsWhenAnEmbeddingModelIsConfigured() throws IOException {
+        Path policiesDir = tempDir.resolve("policies");
+        writePolicy(
+            policiesDir.resolve("backend/logging.md"),
+            """
+                ---
+                policy_id: BACKEND-LOG-001
+                ---
+                # Logging
+
+                Add request ids.
+                """
+        );
+
+        ingestService.ingest(new IngestCommand(policiesDir));
+
+        assertThat(jdbcTemplate.queryForObject(
+            "select embedding::text from %s where chunk_id = ?".formatted(TABLE_NAME),
+            String.class,
+            "BACKEND-LOG-001:logging"
+        )).isEqualTo("[11,12,13]");
+    }
+
+    @Test
     void ingestsPoliciesIntoPostgresWithChunkMetadata() throws IOException {
         Path policiesDir = tempDir.resolve("policies");
         writePolicy(
@@ -131,7 +169,7 @@ class JdbcPolicyChunkStoreIT {
                 "backend",
                 List.of("observability", "audit"),
                 List.of("SOC2-CC7"),
-                true
+                false
             ),
             new StoredChunkRow(
                 "BACKEND-LOG-001:logging__rules",
@@ -149,7 +187,7 @@ class JdbcPolicyChunkStoreIT {
                 "backend",
                 List.of("observability", "audit"),
                 List.of("SOC2-CC7"),
-                true
+                false
             )
         );
     }
@@ -188,6 +226,34 @@ class JdbcPolicyChunkStoreIT {
             "select chunk_id from %s order by chunk_id".formatted(TABLE_NAME),
             String.class
         )).containsExactly("SECURITY-SESSION-001:sessions");
+    }
+
+    @Test
+    void embeddingCountMismatchFailsFastAndRollsBack() throws IOException {
+        Path policiesDir = tempDir.resolve("policies");
+        writePolicy(
+            policiesDir.resolve("backend/logging.md"),
+            """
+                ---
+                policy_id: BACKEND-LOG-001
+                ---
+                # Logging
+                """
+        );
+        ingestService.ingest(new IngestCommand(policiesDir));
+        long rowCountBefore = storedRowCount();
+
+        var chunkStore = new JdbcPolicyChunkStore(
+            jdbcTemplate,
+            TABLE_NAME,
+            new TransactionTemplate(new DataSourceTransactionManager(dataSource)),
+            (inputs, inputType) -> List.of(new float[] {1.0f, 2.0f, 3.0f})
+        );
+
+        assertThatThrownBy(() -> chunkStore.replaceAll(corpusWithTwoChunks()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Embedding model returned 1 embeddings for 2 policy chunks");
+        assertThat(storedRowCount()).isEqualTo(rowCountBefore);
     }
 
     private List<StoredChunkRow> loadStoredChunks() {
@@ -229,6 +295,46 @@ class JdbcPolicyChunkStoreIT {
         );
     }
 
+    private long storedRowCount() {
+        return jdbcTemplate.queryForObject(
+            "select count(*) from %s".formatted(TABLE_NAME),
+            Long.class
+        );
+    }
+
+    private IngestedPolicyCorpus corpusWithTwoChunks() {
+        PolicyMetadata metadata = new PolicyMetadata(
+            "BACKEND-LOG-001",
+            "Logging",
+            "guidance",
+            "backend",
+            List.of("observability"),
+            List.of()
+        );
+        return new IngestedPolicyCorpus(
+            tempDir,
+            List.of(),
+            List.of(
+                new PolicyChunk(
+                    "BACKEND-LOG-001:logging",
+                    "policies/backend/logging.md",
+                    "Logging",
+                    "1-2",
+                    "# Logging",
+                    metadata
+                ),
+                new PolicyChunk(
+                    "BACKEND-LOG-001:logging__rules",
+                    "policies/backend/logging.md",
+                    "Logging > Rules",
+                    "3-4",
+                    "Add request ids.",
+                    metadata
+                )
+            )
+        );
+    }
+
     private static List<String> arrayValue(Array value) throws SQLException {
         if (value == null) {
             return List.of();
@@ -255,5 +361,21 @@ class JdbcPolicyChunkStoreIT {
         List<String> groundedIn,
         boolean embeddingIsNull
     ) {
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class EmbeddingTestConfiguration {
+
+        @Bean
+        PolicyEmbeddingModel policyEmbeddingModel() {
+            return new PolicyEmbeddingModel() {
+                @Override
+                public List<float[]> embed(List<String> inputs, EmbeddingInputType inputType) {
+                    return inputs.stream()
+                        .map(ignored -> new float[] {11.0f, 12.0f, 13.0f})
+                        .toList();
+                }
+            };
+        }
     }
 }
