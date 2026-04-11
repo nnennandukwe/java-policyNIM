@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.Map;
 
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,5 +50,13 @@ class HealthzControllerTests {
             .andExpect(jsonPath("$.reason").value("Bootstrap mode is active. The policy index is not wired yet."))
             .andExpect(jsonPath("$.checks.storage.status").value("error"))
             .andExpect(jsonPath("$.checks.storage.reason").value("Run Flyway migrations and ingest policies."));
+    }
+
+    @Test
+    void returnsOkForLivenessWithoutRunningReadinessChecks() throws Exception {
+        mockMvc.perform(get("/livez"))
+            .andExpect(status().isOk());
+
+        then(runtimeReadinessService).shouldHaveNoInteractions();
     }
 }

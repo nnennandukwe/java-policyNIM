@@ -19,7 +19,7 @@ Run the same package smoke used by CI:
 
 ```bash
 POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
-jar tf target/java-policynim-0.0.1-SNAPSHOT.jar | grep -F BOOT-INF/classes/application.yml
+jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
 ```
 
 ## Container Build
@@ -28,19 +28,20 @@ jar tf target/java-policynim-0.0.1-SNAPSHOT.jar | grep -F BOOT-INF/classes/appli
 docker build -t java-policynim:local .
 ```
 
-The image listens on port `8080`, runs as the `policynim` user, and includes a `/healthz` healthcheck. Runtime secrets are supplied through environment variables, not baked into the image.
+The image listens on port `8080`, runs as the `policynim` user, and includes a `/livez` healthcheck. Runtime secrets are supplied through environment variables, not baked into the image.
 
 ## Offline Readiness Run
 
 ```bash
-java -jar target/java-policynim-0.0.1-SNAPSHOT.jar
+java -jar target/policynim.jar
 ```
 
 Default behavior:
 
 - MCP transport: streamable HTTP
 - MCP path: `/mcp`
-- Health path: `/healthz`
+- Liveness path: `/livez`
+- Readiness path: `/healthz`
 - Storage mode: `noop`
 - NVIDIA provider: disabled
 - Hosted bearer auth: disabled
@@ -83,9 +84,10 @@ docker run --rm \
 
 Add `POLICYNIM_PROVIDER_NVIDIA_ENABLED=true` and `POLICYNIM_PROVIDER_NVIDIA_API_KEY` only for live provider runs.
 
-## Readiness Checks
+## Runtime Checks
 
 ```bash
+curl -s http://127.0.0.1:8080/livez
 curl -s http://127.0.0.1:8080/healthz
 ```
 

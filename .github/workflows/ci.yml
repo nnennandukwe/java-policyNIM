@@ -89,4 +89,4 @@ jobs:
       - name: Build jar package offline from live providers
         run: |
           POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
-          jar tf target/java-policynim-0.0.1-SNAPSHOT.jar | grep -F BOOT-INF/classes/application.yml
+          jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml

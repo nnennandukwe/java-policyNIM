@@ -12,9 +12,9 @@ FROM eclipse-temurin:21-jre-jammy@sha256:da196dd83cde2d23408db1ce69bfd4b64d6c4f5
 
 WORKDIR /app
 RUN addgroup --system policynim && adduser --system --ingroup policynim policynim
-COPY --from=build /workspace/target/java-policynim-0.0.1-SNAPSHOT.jar /app/policynim.jar
+COPY --from=build /workspace/target/policynim.jar /app/policynim.jar
 
 USER policynim
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 CMD ["wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 CMD ["wget", "-qO-", "http://127.0.0.1:8080/livez"]
 ENTRYPOINT ["java", "-jar", "/app/policynim.jar"]

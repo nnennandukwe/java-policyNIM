@@ -20,4 +20,9 @@ public class HealthzController {
         HttpStatus status = response.ready() ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
         return ResponseEntity.status(status).body(response);
     }
+
+    @GetMapping("/livez")
+    public ResponseEntity<Void> livez() {
+        return ResponseEntity.ok().build();
+    }
 }

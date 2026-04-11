@@ -7,7 +7,8 @@ The current server exposes:
 - `policy_search` for grounded policy search over the local corpus
 - `policy_preflight` for task-specific policy guidance with citation validation
 - `/mcp` as the hosted streamable HTTP MCP endpoint
-- `/healthz` as a public readiness endpoint
+- `/livez` as a public liveness endpoint
+- `/healthz` as a public readiness endpoint with diagnostic storage details
 
 Project docs:
 
@@ -41,4 +42,4 @@ The Dockerfile uses pinned Eclipse Temurin base image digests, runs the service 
 
 ## Hosted MCP Auth
 
-Bearer auth for the hosted MCP endpoint is opt-in while local bootstrap work is still in progress. Set `policynim.mcp.auth.enabled=true` and provide `POLICYNIM_MCP_BEARER_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`; `/healthz` stays public for readiness probes.
+Bearer auth for the hosted MCP endpoint is opt-in while local bootstrap work is still in progress. Set `policynim.mcp.auth.enabled=true` and provide `POLICYNIM_MCP_BEARER_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`; `/livez` and `/healthz` stay public for probes.

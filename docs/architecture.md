@@ -36,7 +36,8 @@ Set `policynim.storage.mode=jdbc` with a configured Postgres datasource to serve
 
 ## Public Surface
 
-- `GET /healthz` stays unauthenticated for readiness probes.
+- `GET /livez` stays unauthenticated for lightweight liveness probes.
+- `GET /healthz` stays unauthenticated for detailed readiness diagnostics.
 - `/mcp` serves streamable HTTP MCP traffic by default.
 - `policy_search` and `policy_preflight` are the stable tool names.
 - Bearer auth is opt-in with `policynim.mcp.auth.enabled=true` and `POLICYNIM_MCP_BEARER_TOKEN`.

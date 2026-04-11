@@ -58,7 +58,7 @@ class ReleasePackagingContractsTests {
                 .contains(OFFLINE_PROVIDER_ENV)
                 .contains("-DskipTests package"))
             .anySatisfy(command -> assertThat(command)
-                .contains("jar tf target/java-policynim-0.0.1-SNAPSHOT.jar")
+                .contains("jar tf target/policynim.jar")
                 .contains("BOOT-INF/classes/application.yml"));
     }
 
@@ -73,10 +73,13 @@ class ReleasePackagingContractsTests {
             .contains("COPY mvnw pom.xml ./")
             .contains("RUN ./mvnw -B -DskipTests package")
             .contains("RUN addgroup --system policynim && adduser --system --ingroup policynim policynim")
+            .contains("COPY --from=build /workspace/target/policynim.jar /app/policynim.jar")
             .contains("USER policynim")
             .contains("EXPOSE 8080")
             .contains("HEALTHCHECK")
+            .contains("http://127.0.0.1:8080/livez")
             .contains("ENTRYPOINT [\"java\", \"-jar\", \"/app/policynim.jar\"]")
+            .doesNotContain("java-policynim-0.0.1-SNAPSHOT.jar")
             .doesNotContain("POLICYNIM_PROVIDER_NVIDIA_API_KEY")
             .doesNotContain("POLICYNIM_MCP_BEARER_TOKEN=");
     }

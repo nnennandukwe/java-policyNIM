@@ -23,7 +23,7 @@ public class SecurityConfiguration {
         if (bearerAuthEnabled) {
             http
                 .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/healthz").permitAll()
+                    .requestMatchers("/healthz", "/livez").permitAll()
                     .anyRequest().hasRole("MCP_CLIENT")
                 )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
@@ -39,7 +39,7 @@ public class SecurityConfiguration {
         else {
             http
                 .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/healthz").permitAll()
+                    .requestMatchers("/healthz", "/livez").permitAll()
                     .requestMatchers(mcpEndpointMatchers(properties)).permitAll()
                     .anyRequest().denyAll()
                 )

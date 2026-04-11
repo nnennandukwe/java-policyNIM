@@ -32,6 +32,12 @@ class BearerTokenSecurityTests {
     }
 
     @Test
+    void leavesLivezPublicWhenBearerAuthIsEnabled() throws Exception {
+        mockMvc.perform(get("/livez"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
     void rejectsHostedMcpRequestsWithoutBearerToken() throws Exception {
         mockMvc.perform(post("/mcp")
                 .contentType(MediaType.APPLICATION_JSON)
