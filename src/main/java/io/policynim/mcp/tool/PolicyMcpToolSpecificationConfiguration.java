@@ -16,6 +16,9 @@ import java.util.function.Supplier;
 @Configuration(proxyBeanMethods = false)
 public class PolicyMcpToolSpecificationConfiguration {
 
+    private static final String INTERNAL_TOOL_ERROR_MESSAGE =
+        "PolicyNIM tool invocation failed. See server logs for details.";
+
     @Bean
     List<McpServerFeatures.SyncToolSpecification> policySyncToolSpecifications(
         PolicyMcpTools tools,
@@ -125,6 +128,9 @@ public class PolicyMcpToolSpecificationConfiguration {
         }
         catch (McpToolInvocationException | IllegalArgumentException exception) {
             return toolError(exception.getMessage());
+        }
+        catch (RuntimeException exception) {
+            return toolError(INTERNAL_TOOL_ERROR_MESSAGE);
         }
     }
 
