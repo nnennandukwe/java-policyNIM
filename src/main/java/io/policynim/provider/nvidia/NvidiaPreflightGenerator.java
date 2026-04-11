@@ -108,12 +108,12 @@ final class NvidiaPreflightGenerator implements PolicyPreflightGenerator {
             """;
     }
 
-    private static String userPrompt(PolicyPreflightGenerationRequest request) {
+    private String userPrompt(PolicyPreflightGenerationRequest request) {
         return """
             Task: %s
             Domain: %s
             Target top_k: %d
-            Retrieved context:
+            Retrieved context JSON:
             %s
             """.formatted(
             request.task(),
@@ -123,22 +123,43 @@ final class NvidiaPreflightGenerator implements PolicyPreflightGenerator {
         );
     }
 
-    private static String formatEvidence(List<PolicyGroundingEvidence> evidence) {
-        if (evidence.isEmpty()) {
-            return "(no retrieved policy evidence)";
+    private String formatEvidence(List<PolicyGroundingEvidence> evidence) {
+        try {
+            return objectMapper.writerWithDefaultPrettyPrinter()
+                .writeValueAsString(evidence.stream()
+                    .map(PromptEvidence::from)
+                    .toList());
         }
-        StringBuilder builder = new StringBuilder();
-        for (PolicyGroundingEvidence item : evidence) {
-            builder.append("- chunk_id: ").append(item.chunkId()).append('\n')
-                .append("  policy_id: ").append(item.policyId()).append('\n')
-                .append("  title: ").append(item.title()).append('\n')
-                .append("  domain: ").append(item.domain()).append('\n')
-                .append("  path: ").append(item.path()).append('\n')
-                .append("  section: ").append(item.section()).append('\n')
-                .append("  lines: ").append(item.lines()).append('\n')
-                .append("  text: ").append(item.text()).append('\n');
+        catch (JsonProcessingException exception) {
+            throw new IllegalStateException("NVIDIA preflight evidence could not be serialized as JSON.", exception);
         }
-        return builder.toString();
+    }
+
+    private record PromptEvidence(
+        @JsonProperty("chunk_id") String chunkId,
+        String path,
+        String section,
+        String lines,
+        String text,
+        @JsonProperty("policy_id") String policyId,
+        String title,
+        String domain,
+        double score
+    ) {
+
+        private static PromptEvidence from(PolicyGroundingEvidence evidence) {
+            return new PromptEvidence(
+                evidence.chunkId(),
+                evidence.path(),
+                evidence.section(),
+                evidence.lines(),
+                evidence.text(),
+                evidence.policyId(),
+                evidence.title(),
+                evidence.domain(),
+                evidence.score()
+            );
+        }
     }
 
     private record ChatCompletionRequest(

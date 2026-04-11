@@ -46,6 +46,9 @@ class NvidiaPreflightGeneratorTests {
             .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(content().string(containsString("\"model\":\"nvidia/llama-3.3-nemotron-super-49b-v1.5\"")))
             .andExpect(content().string(containsString("BACKEND-1")))
+            .andExpect(content().string(containsString("Retrieved context JSON:")))
+            .andExpect(content().string(containsString("\\\"chunk_id\\\" : \\\"BACKEND-1\\\"")))
+            .andExpect(content().string(containsString("\\\"policy_id\\\" : \\\"BACKEND-LOG-001\\\"")))
             .andRespond(withSuccess(
                 """
                 {
