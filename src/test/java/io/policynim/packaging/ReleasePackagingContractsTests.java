@@ -1,5 +1,6 @@
 package io.policynim.packaging;
 
+import io.policynim.ingest.IngestCommandLine;
 import org.junit.jupiter.api.Test;
 import org.yaml.snakeyaml.Yaml;
 
@@ -96,6 +97,14 @@ class ReleasePackagingContractsTests {
             .contains(".claude/")
             .contains(".implementation-plan.md")
             .contains("*.iml");
+    }
+
+    @Test
+    void docsPublishTheExecutableIngestCommand() throws IOException {
+        assertThat(Files.readString(REPOSITORY_ROOT.resolve("README.md")))
+            .contains(IngestCommandLine.COMMAND_EXAMPLE);
+        assertThat(Files.readString(REPOSITORY_ROOT.resolve("docs/hosted-runbook.md")))
+            .contains(IngestCommandLine.COMMAND_EXAMPLE);
     }
 
     private static boolean usesPinnedActionReference(String actionReference) {
