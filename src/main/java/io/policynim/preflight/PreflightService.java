@@ -10,6 +10,8 @@ import io.policynim.retrieval.ScoredPolicyChunk;
 import io.policynim.retrieval.SearchRequest;
 import io.policynim.retrieval.SearchResult;
 import io.policynim.retrieval.SearchService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,6 +21,8 @@ import java.util.Map;
 import java.util.Objects;
 
 public class PreflightService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(PreflightService.class);
 
     private final SearchService searchService;
     private final PolicyPreflightGenerator generator;
@@ -79,13 +83,14 @@ public class PreflightService {
             if (policyCitationIds.isEmpty()) {
                 continue;
             }
-            PolicyMetadata policyMetadata = resolvePolicyMetadata(policyCitationIds, contextById);
-            if (policyMetadata == null) {
+            PolicyMetadataResolution policyMetadataResolution = resolvePolicyMetadata(policyCitationIds, contextById);
+            if (policyMetadataResolution.failed()) {
+                logPolicyMetadataResolutionFailure(request, policyCitationIds, policyMetadataResolution);
                 return PreflightResult.insufficientContext(request);
             }
             applicablePolicies.add(new PolicyGuidance(
-                policyMetadata.policyId(),
-                policyMetadata.title(),
+                policyMetadataResolution.policyMetadata().policyId(),
+                policyMetadataResolution.policyMetadata().title(),
                 policy.rationale(),
                 policyCitationIds
             ));
@@ -150,15 +155,18 @@ public class PreflightService {
         return citationIds.stream().anyMatch(citationId -> !contextById.containsKey(citationId));
     }
 
-    private static PolicyMetadata resolvePolicyMetadata(
+    private static PolicyMetadataResolution resolvePolicyMetadata(
         List<String> citationIds,
         Map<String, ScoredPolicyChunk> contextById
     ) {
         PolicyMetadata resolved = null;
         for (String citationId : citationIds) {
             ScoredPolicyChunk chunk = contextById.get(citationId);
-            if (chunk == null || chunk.policy() == null) {
-                return null;
+            if (chunk == null) {
+                return PolicyMetadataResolution.missingChunk(citationId);
+            }
+            if (chunk.policy() == null) {
+                return PolicyMetadataResolution.missingPolicyMetadata(citationId);
             }
             PolicyMetadata candidate = chunk.policy();
             if (resolved == null) {
@@ -166,15 +174,43 @@ public class PreflightService {
                 continue;
             }
             if (!samePolicyMetadata(resolved, candidate)) {
-                return null;
+                return PolicyMetadataResolution.mismatchedPolicyMetadata(citationId, resolved, candidate);
             }
         }
-        return resolved;
+        return PolicyMetadataResolution.resolved(resolved);
     }
 
     private static boolean samePolicyMetadata(PolicyMetadata left, PolicyMetadata right) {
         return Objects.equals(left.policyId(), right.policyId())
             && Objects.equals(left.title(), right.title());
+    }
+
+    private static void logPolicyMetadataResolutionFailure(
+        PreflightRequest request,
+        List<String> citationIds,
+        PolicyMetadataResolution resolution
+    ) {
+        LOGGER.warn(
+            "event=preflight_policy_metadata_resolution_failed reason={} domain={} top_k={} citation_ids={} " +
+                "failure_citation_id={} expected_policy_id={} expected_title={} actual_policy_id={} actual_title={}",
+            resolution.failure(),
+            request.domain(),
+            request.topK(),
+            citationIds,
+            resolution.failureCitationId(),
+            policyId(resolution.expectedPolicyMetadata()),
+            title(resolution.expectedPolicyMetadata()),
+            policyId(resolution.actualPolicyMetadata()),
+            title(resolution.actualPolicyMetadata())
+        );
+    }
+
+    private static String policyId(PolicyMetadata policyMetadata) {
+        return policyMetadata == null ? null : policyMetadata.policyId();
+    }
+
+    private static String title(PolicyMetadata policyMetadata) {
+        return policyMetadata == null ? null : policyMetadata.title();
     }
 
     private static List<String> materializedCitationIds(GeneratedPreflightDraft draft) {
@@ -192,5 +228,62 @@ public class PreflightService {
 
     private static List<String> orderedUnique(List<String> values) {
         return List.copyOf(new LinkedHashSet<>(values));
+    }
+
+    private enum PolicyMetadataResolutionFailure {
+        MISSING_CHUNK,
+        MISSING_POLICY_METADATA,
+        POLICY_METADATA_MISMATCH
+    }
+
+    private record PolicyMetadataResolution(
+        PolicyMetadata policyMetadata,
+        PolicyMetadataResolutionFailure failure,
+        String failureCitationId,
+        PolicyMetadata expectedPolicyMetadata,
+        PolicyMetadata actualPolicyMetadata
+    ) {
+
+        private static PolicyMetadataResolution resolved(PolicyMetadata policyMetadata) {
+            return new PolicyMetadataResolution(policyMetadata, null, null, null, null);
+        }
+
+        private static PolicyMetadataResolution missingChunk(String citationId) {
+            return new PolicyMetadataResolution(
+                null,
+                PolicyMetadataResolutionFailure.MISSING_CHUNK,
+                citationId,
+                null,
+                null
+            );
+        }
+
+        private static PolicyMetadataResolution missingPolicyMetadata(String citationId) {
+            return new PolicyMetadataResolution(
+                null,
+                PolicyMetadataResolutionFailure.MISSING_POLICY_METADATA,
+                citationId,
+                null,
+                null
+            );
+        }
+
+        private static PolicyMetadataResolution mismatchedPolicyMetadata(
+            String citationId,
+            PolicyMetadata expectedPolicyMetadata,
+            PolicyMetadata actualPolicyMetadata
+        ) {
+            return new PolicyMetadataResolution(
+                null,
+                PolicyMetadataResolutionFailure.POLICY_METADATA_MISMATCH,
+                citationId,
+                expectedPolicyMetadata,
+                actualPolicyMetadata
+            );
+        }
+
+        private boolean failed() {
+            return failure != null;
+        }
     }
 }

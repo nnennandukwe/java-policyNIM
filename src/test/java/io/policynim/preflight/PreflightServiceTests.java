@@ -10,7 +10,10 @@ import io.policynim.retrieval.ScoredPolicyChunk;
 import io.policynim.retrieval.SearchRequest;
 import io.policynim.retrieval.SearchResult;
 import io.policynim.retrieval.SearchService;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.util.List;
 
@@ -166,6 +169,58 @@ class PreflightServiceTests {
             "5-8",
             "BACKEND-1"
         ));
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void logsDiagnosticWhenCitedEvidenceSpansMultiplePolicyMetadata(CapturedOutput output) {
+        SearchService searchService = mock(SearchService.class);
+        given(searchService.search(new SearchRequest("add request ids to logs", "backend", 2))).willReturn(
+            new SearchResult(
+                "add request ids to logs",
+                "backend",
+                2,
+                List.of(
+                    scoredChunk("BACKEND-1", "BACKEND-LOG-001", "Logging", "backend"),
+                    scoredChunk("SECURITY-1", "SECURITY-AUTH-001", "Auth", "backend")
+                ),
+                false
+            )
+        );
+        RecordingPreflightGenerator generator = new RecordingPreflightGenerator(
+            new GeneratedPreflightDraft(
+                "Use request ids in backend logs.",
+                List.of(new GeneratedPolicyGuidance(
+                    "BACKEND-LOG-001",
+                    "Logging",
+                    "The retrieved policy requires request ids.",
+                    List.of("BACKEND-1", "SECURITY-1")
+                )),
+                List.of(),
+                List.of("Log request ids with every backend event."),
+                List.of(),
+                List.of(),
+                List.of("BACKEND-1", "SECURITY-1"),
+                false
+            )
+        );
+        PreflightService service = new PreflightService(searchService, generator);
+
+        PreflightResult result = service.preflight(new PreflightRequest("add request ids to logs", "backend", 2));
+
+        assertThat(result.insufficientContext()).isTrue();
+        assertThat(result.summary()).isEqualTo(PreflightResult.INSUFFICIENT_CONTEXT_SUMMARY);
+        assertThat(result.summary()).doesNotContain("POLICY_METADATA_MISMATCH");
+        assertThat(result.applicablePolicies()).isEmpty();
+        assertThat(result.citations()).isEmpty();
+        assertThat(output).contains("event=preflight_policy_metadata_resolution_failed")
+            .contains("reason=POLICY_METADATA_MISMATCH")
+            .contains("domain=backend")
+            .contains("top_k=2")
+            .contains("citation_ids=[BACKEND-1, SECURITY-1]")
+            .contains("failure_citation_id=SECURITY-1")
+            .contains("expected_policy_id=BACKEND-LOG-001")
+            .contains("actual_policy_id=SECURITY-AUTH-001");
     }
 
     @Test
