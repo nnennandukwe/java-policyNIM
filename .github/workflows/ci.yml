@@ -42,7 +42,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Run JDBC integration tests offline from live providers
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=io.policynim.persistence.jdbc.*IT failsafe:integration-test failsafe:verify
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress test-compile -Dit.test=io.policynim.persistence.jdbc.*IT failsafe:integration-test failsafe:verify
 
   acceptance:
     name: acceptance tests
@@ -57,7 +57,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Run acceptance tests offline from live providers
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PolicyNimAcceptanceIT failsafe:integration-test failsafe:verify
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress test-compile -Dit.test=PolicyNimAcceptanceIT failsafe:integration-test failsafe:verify
 
   archunit:
     name: architecture rules

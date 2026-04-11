@@ -39,11 +39,13 @@ class ReleasePackagingContractsTests {
         assertThat(runCommands(jobs, "integration"))
             .anySatisfy(command -> assertThat(command)
                 .contains(OFFLINE_PROVIDER_ENV)
+                .contains("test-compile")
                 .contains("-Dit.test=io.policynim.persistence.jdbc.*IT")
                 .contains("failsafe:integration-test failsafe:verify"));
         assertThat(runCommands(jobs, "acceptance"))
             .anySatisfy(command -> assertThat(command)
                 .contains(OFFLINE_PROVIDER_ENV)
+                .contains("test-compile")
                 .contains("-Dit.test=PolicyNimAcceptanceIT")
                 .contains("failsafe:integration-test failsafe:verify"));
         assertThat(runCommands(jobs, "archunit"))
