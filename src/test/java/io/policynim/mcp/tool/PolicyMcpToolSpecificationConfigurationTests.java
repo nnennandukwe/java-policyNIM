@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -34,5 +35,24 @@ class PolicyMcpToolSpecificationConfigurationTests {
         assertThat(result.structuredContent()).isEqualTo(Map.of(
             "error", "policy_search is unavailable until PolicyNIM is ready. Run the ingest command."
         ));
+    }
+
+    @Test
+    void registersPolicyPreflightWithTaskArguments() {
+        PolicyMcpTools tools = mock(PolicyMcpTools.class);
+
+        List<McpServerFeatures.SyncToolSpecification> specifications =
+            new PolicyMcpToolSpecificationConfiguration().policySyncToolSpecifications(tools, new ObjectMapper());
+
+        Map<String, McpServerFeatures.SyncToolSpecification> byName = specifications.stream()
+            .collect(Collectors.toMap(specification -> specification.tool().name(), specification -> specification));
+
+        assertThat(byName.keySet()).containsExactlyInAnyOrder("policy_search", "policy_preflight");
+        byName.get("policy_preflight").call().apply(null, Map.of(
+            "task", "refresh token cleanup",
+            "domain", "security",
+            "topK", 3
+        ));
+        org.mockito.Mockito.verify(tools).policyPreflight("refresh token cleanup", "security", 3);
     }
 }

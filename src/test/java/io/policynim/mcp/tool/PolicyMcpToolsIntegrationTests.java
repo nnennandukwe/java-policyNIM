@@ -27,6 +27,6 @@ class PolicyMcpToolsIntegrationTests {
         assertThat(applicationContext.containsBean("mcpHttpPlaceholderController")).isFalse();
         assertThat(toolSpecifications)
             .extracting(specification -> specification.tool().name())
-            .containsExactly("policy_search");
+            .containsExactly("policy_search", "policy_preflight");
     }
 }
