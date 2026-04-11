@@ -29,14 +29,16 @@ The default runtime is offline from live providers: NVIDIA-backed embedding, rer
 Build the application jar, configure JDBC storage, then populate the policy chunk table:
 
 ```bash
-java -jar <path-to-policynim.jar> ingest --corpus-root=/absolute/path/to/policies \
-  --policynim.storage.mode=jdbc \
-  --spring.datasource.url=jdbc:postgresql://localhost:5432/policynim \
-  --spring.datasource.username=policynim \
-  --spring.datasource.password=policynim
+export POLICYNIM_STORAGE_MODE=jdbc
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/policynim
+export SPRING_DATASOURCE_USERNAME=policynim
+export SPRING_DATASOURCE_PASSWORD=policynim
+
+java -jar <path-to-policynim.jar> ingest --corpus-root=/absolute/path/to/policies
 ```
 
 The ingest command exits after loading the corpus and does not start the hosted MCP web server.
+Keep datasource passwords in environment variables or a secret manager rather than inline command arguments.
 
 ## Packaging
 
