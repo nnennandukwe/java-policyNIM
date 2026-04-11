@@ -57,7 +57,7 @@ final class NvidiaPreflightGenerator implements PolicyPreflightGenerator {
 
     private GeneratedPreflightDraft parseDraft(String content) {
         try {
-            return objectMapper.readValue(extractJsonObject(content), GeneratedPreflightDraft.class);
+            return objectMapper.readValue(content.trim(), GeneratedPreflightDraft.class);
         }
         catch (JsonProcessingException | IllegalArgumentException exception) {
             throw new IllegalStateException(
@@ -76,15 +76,6 @@ final class NvidiaPreflightGenerator implements PolicyPreflightGenerator {
             throw new IllegalStateException("NVIDIA preflight response did not include completion content.");
         }
         return choice.message().content();
-    }
-
-    private static String extractJsonObject(String content) {
-        int start = content.indexOf('{');
-        int end = content.lastIndexOf('}');
-        if (start < 0 || end < start) {
-            throw new IllegalArgumentException("completion content did not include a JSON object");
-        }
-        return content.substring(start, end + 1);
     }
 
     private static String systemPrompt() {

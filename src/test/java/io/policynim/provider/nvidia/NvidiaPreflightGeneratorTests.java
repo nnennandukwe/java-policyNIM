@@ -138,4 +138,58 @@ class NvidiaPreflightGeneratorTests {
             .hasMessageContaining("valid JSON");
         server.verify();
     }
+
+    @Test
+    void rejectsChatResponsesThatWrapJsonInCommentary() {
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        NvidiaPreflightGenerator generator = new NvidiaPreflightGenerator(
+            restClientBuilder,
+            new NvidiaProviderProperties(
+                true,
+                "test-api-key",
+                "https://generation.example.test",
+                "nvidia/llama-3.2-nv-embedqa-1b-v2",
+                "nvidia/llama-nemotron-rerank-1b-v2",
+                "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+            ),
+            new ObjectMapper()
+        );
+
+        server.expect(requestTo("https://generation.example.test/v1/chat/completions"))
+            .andRespond(withSuccess(
+                """
+                {
+                  "choices": [
+                    {
+                      "message": {
+                        "content": "Here is the JSON: {\\"summary\\":\\"Use request ids.\\",\\"applicable_policies\\":[],\\"implementation_guidance\\":[],\\"review_flags\\":[],\\"tests_required\\":[],\\"citation_ids\\":[],\\"insufficient_context\\":true}"
+                      }
+                    }
+                  ]
+                }
+                """,
+                MediaType.APPLICATION_JSON
+            ));
+
+        assertThatThrownBy(() -> generator.generatePreflight(new PolicyPreflightGenerationRequest(
+            "task",
+            null,
+            1,
+            List.of(new PolicyGroundingEvidence(
+                "BACKEND-1",
+                "policy.md",
+                "Rules",
+                "1-2",
+                "Use request ids.",
+                "BACKEND-LOG-001",
+                "Logging",
+                "backend",
+                0.99d
+            ))
+        )))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("valid JSON");
+        server.verify();
+    }
 }
