@@ -12,6 +12,9 @@ policynim:
     host: 127.0.0.1
     port: 8080
     streamable-http-path: /mcp
+    auth:
+      enabled: false
+      bearer-token: ${POLICYNIM_MCP_BEARER_TOKEN:}
   storage:
     mode: noop
     table-name: policy_chunks
