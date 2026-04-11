@@ -8,6 +8,10 @@ public interface PolicyChunkReadStore {
 
     long rowCount();
 
+    default boolean hasRows() {
+        return exists() && rowCount() > 0;
+    }
+
     List<ScoredPolicyChunk> search(String query, String domain, int limit);
 
     default List<ScoredPolicyChunk> searchByEmbedding(float[] embedding, String domain, int limit) {
@@ -29,6 +33,11 @@ public interface PolicyChunkReadStore {
         @Override
         public long rowCount() {
             return 0;
+        }
+
+        @Override
+        public boolean hasRows() {
+            return false;
         }
 
         @Override

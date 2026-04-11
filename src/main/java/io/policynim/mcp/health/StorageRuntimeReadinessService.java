@@ -20,6 +20,15 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
 
     @Override
     public HealthCheckResponse currentReadiness() {
+        return computeReadiness(true);
+    }
+
+    @Override
+    public HealthCheckResponse toolReadiness() {
+        return computeReadiness(false);
+    }
+
+    private HealthCheckResponse computeReadiness(boolean includeExactRowCount) {
         if (properties.getStorage().getMode() != PolicyNimProperties.StorageMode.JDBC) {
             return notReady(
                 0,
@@ -30,6 +39,17 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
         }
 
         try {
+            if (!includeExactRowCount) {
+                if (readStore.hasRows()) {
+                    return ready(1);
+                }
+                return notReady(
+                    0,
+                    "Policy chunk table " + tableName() + " is not available or has no ingested chunks. "
+                        + "Run Flyway migrations and the ingest command before serving MCP traffic."
+                );
+            }
+
             if (!readStore.exists()) {
                 return notReady(
                     0,

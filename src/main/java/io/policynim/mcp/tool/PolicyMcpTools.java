@@ -50,7 +50,7 @@ public class PolicyMcpTools {
     }
 
     private void guardRuntimeReady(String toolName) {
-        HealthCheckResponse readiness = readinessService.currentReadiness();
+        HealthCheckResponse readiness = readinessService.toolReadiness();
         if (!readiness.ready()) {
             throw new McpToolInvocationException(
                 toolName + " is unavailable until PolicyNIM is ready. " + readiness.reason()

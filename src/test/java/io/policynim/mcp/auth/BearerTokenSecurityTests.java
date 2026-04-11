@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -56,5 +57,38 @@ class BearerTokenSecurityTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
+    }
+
+}
+
+@SpringBootTest(properties = "policynim.mcp.auth.enabled=false")
+@AutoConfigureMockMvc
+class BearerTokenDisabledSecurityTests {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void doesNotRequireBasicAuthWhenBearerAuthIsDisabled() throws Exception {
+        mockMvc.perform(post("/mcp")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
+    }
+}
+
+@SpringBootTest(properties = {
+    "policynim.mcp.transport=stdio",
+    "policynim.mcp.auth.enabled=true",
+    "policynim.mcp.auth.bearer-token= "
+})
+class StdioBearerTokenSecurityTests {
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Test
+    void startsStdioAuthEnabledWithoutABearerToken() {
+        assertThat(applicationContext).isNotNull();
     }
 }

@@ -48,7 +48,7 @@ public final class McpTelemetry {
             .record(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS);
 
         if (exception == null) {
-            LOGGER.atInfo()
+            LOGGER.atDebug()
                 .addKeyValue("event", "mcp.tool.invocation")
                 .addKeyValue("tool.name", toolName)
                 .addKeyValue("outcome", outcome)

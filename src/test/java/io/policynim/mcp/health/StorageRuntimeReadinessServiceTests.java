@@ -76,6 +76,22 @@ class StorageRuntimeReadinessServiceTests {
     }
 
     @Test
+    void toolReadinessUsesCheapRowPresenceCheckWithoutCountingRows() {
+        PolicyNimProperties properties = jdbcProperties();
+        CountingReadStore readStore = new CountingReadStore(true, true, 7);
+
+        HealthCheckResponse response = new StorageRuntimeReadinessService(
+            properties,
+            readStore
+        ).toolReadiness();
+
+        assertThat(response.ready()).isTrue();
+        assertThat(readStore.existsCalls).isEqualTo(1);
+        assertThat(readStore.hasRowsCalls).isEqualTo(1);
+        assertThat(readStore.rowCountCalls).isZero();
+    }
+
+    @Test
     void convertsReadinessStoreFailuresIntoFailClosedHealthPayloads() {
         PolicyNimProperties properties = jdbcProperties();
 
@@ -119,6 +135,11 @@ class StorageRuntimeReadinessServiceTests {
         }
 
         @Override
+        public boolean hasRows() {
+            return exists && rowCount > 0;
+        }
+
+        @Override
         public List<ScoredPolicyChunk> search(String query, String domain, int limit) {
             return List.of();
         }
@@ -134,6 +155,45 @@ class StorageRuntimeReadinessServiceTests {
         @Override
         public long rowCount() {
             return 0;
+        }
+
+        @Override
+        public List<ScoredPolicyChunk> search(String query, String domain, int limit) {
+            return List.of();
+        }
+    }
+
+    private static final class CountingReadStore implements PolicyChunkReadStore {
+
+        private final boolean exists;
+        private final boolean hasRows;
+        private final long rowCount;
+        private int existsCalls;
+        private int hasRowsCalls;
+        private int rowCountCalls;
+
+        private CountingReadStore(boolean exists, boolean hasRows, long rowCount) {
+            this.exists = exists;
+            this.hasRows = hasRows;
+            this.rowCount = rowCount;
+        }
+
+        @Override
+        public boolean exists() {
+            existsCalls++;
+            return exists;
+        }
+
+        @Override
+        public long rowCount() {
+            rowCountCalls++;
+            return rowCount;
+        }
+
+        @Override
+        public boolean hasRows() {
+            hasRowsCalls++;
+            return exists() && hasRows;
         }
 
         @Override

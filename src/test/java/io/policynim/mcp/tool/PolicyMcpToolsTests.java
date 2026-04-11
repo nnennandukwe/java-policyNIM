@@ -57,14 +57,7 @@ class PolicyMcpToolsTests {
     @Test
     void delegatesPolicySearchWhenRuntimeIsReadyAndRecordsTelemetry() {
         SearchService searchService = mock(SearchService.class);
-        RuntimeReadinessService readinessService = () -> new HealthCheckResponse(
-            "ok",
-            true,
-            "policy_chunks",
-            3,
-            "https://example.com/mcp",
-            "Policy chunk index is ready."
-        );
+        RuntimeReadinessService readinessService = new ToolOnlyReadinessService();
         SearchResult searchResult = new SearchResult("pto", null, 5, List.of(), true);
         given(searchService.search(new SearchRequest("pto", null, 5))).willReturn(searchResult);
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -85,5 +78,25 @@ class PolicyMcpToolsTests {
             "outcome",
             "success"
         ).count()).isEqualTo(1.0d);
+    }
+
+    private static final class ToolOnlyReadinessService implements RuntimeReadinessService {
+
+        @Override
+        public HealthCheckResponse currentReadiness() {
+            throw new AssertionError("policy_search should use lightweight tool readiness");
+        }
+
+        @Override
+        public HealthCheckResponse toolReadiness() {
+            return new HealthCheckResponse(
+                "ok",
+                true,
+                "policy_chunks",
+                1,
+                "https://example.com/mcp",
+                "Policy chunk index is ready."
+            );
+        }
     }
 }

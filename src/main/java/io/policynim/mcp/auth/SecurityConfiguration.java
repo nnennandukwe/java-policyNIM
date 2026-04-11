@@ -1,9 +1,9 @@
 package io.policynim.mcp.auth;
 
+import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -15,15 +15,17 @@ public class SecurityConfiguration {
 
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, PolicyNimProperties properties) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/healthz").permitAll()
-                .anyRequest().authenticated()
-            );
+        boolean bearerAuthEnabled = bearerAuthEnabled(properties);
 
-        if (properties.getMcp().getAuth().isEnabled()) {
+        http.csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+
+        if (bearerAuthEnabled) {
             http
+                .authorizeHttpRequests(authorize -> authorize
+                    .requestMatchers("/healthz").permitAll()
+                    .anyRequest().hasRole("MCP_CLIENT")
+                )
                 .exceptionHandling(exceptionHandling -> exceptionHandling
                     .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
                 )
@@ -35,9 +37,26 @@ public class SecurityConfiguration {
                 .formLogin(AbstractHttpConfigurer::disable);
         }
         else {
-            http.httpBasic(Customizer.withDefaults());
+            http
+                .authorizeHttpRequests(authorize -> authorize
+                    .requestMatchers("/healthz").permitAll()
+                    .requestMatchers(mcpEndpointMatchers(properties)).permitAll()
+                    .anyRequest().denyAll()
+                )
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable);
         }
 
         return http.build();
+    }
+
+    private static String[] mcpEndpointMatchers(PolicyNimProperties properties) {
+        String streamableHttpPath = properties.getMcp().getStreamableHttpPath();
+        return new String[] {streamableHttpPath, streamableHttpPath + "/**"};
+    }
+
+    private static boolean bearerAuthEnabled(PolicyNimProperties properties) {
+        return properties.getMcp().getTransport() == McpTransport.STREAMABLE_HTTP
+            && properties.getMcp().getAuth().isEnabled();
     }
 }
