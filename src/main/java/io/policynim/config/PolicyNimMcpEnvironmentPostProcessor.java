@@ -31,6 +31,8 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
             putIfMissing(environment, derived, "spring.ai.mcp.server.stdio", "true");
         }
         else {
+            putIfMissing(environment, derived, "server.address", environment.getProperty("policynim.mcp.host"));
+            putIfMissing(environment, derived, "server.port", environment.getProperty("policynim.mcp.port"));
             putIfMissing(environment, derived, "spring.ai.mcp.server.stdio", "false");
             putIfMissing(environment, derived, "spring.ai.mcp.server.protocol", "STREAMABLE");
             putIfMissing(

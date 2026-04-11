@@ -39,6 +39,7 @@ java -jar target/policynim.jar
 Default behavior:
 
 - MCP transport: streamable HTTP
+- HTTP bind: `127.0.0.1:8080`
 - MCP path: `/mcp`
 - Liveness path: `/livez`
 - Readiness path: `/healthz`
@@ -57,6 +58,8 @@ export POLICYNIM_STORAGE_MODE=jdbc
 export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/policynim
 export SPRING_DATASOURCE_USERNAME=policynim
 export SPRING_DATASOURCE_PASSWORD=policynim
+export POLICYNIM_MCP_HOST=0.0.0.0
+export POLICYNIM_MCP_PORT=8080
 export POLICYNIM_MCP_AUTH_ENABLED=true
 export POLICYNIM_MCP_BEARER_TOKEN=replace-with-runtime-secret
 ```
@@ -87,6 +90,8 @@ docker run --rm \
   -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/policynim \
   -e SPRING_DATASOURCE_USERNAME=policynim \
   -e SPRING_DATASOURCE_PASSWORD=policynim \
+  -e POLICYNIM_MCP_HOST=0.0.0.0 \
+  -e POLICYNIM_MCP_PORT=8080 \
   -e POLICYNIM_MCP_AUTH_ENABLED=true \
   -e POLICYNIM_MCP_BEARER_TOKEN=replace-with-runtime-secret \
   java-policynim:local
