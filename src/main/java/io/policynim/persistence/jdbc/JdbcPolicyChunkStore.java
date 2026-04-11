@@ -64,6 +64,7 @@ final class JdbcPolicyChunkStore implements PolicyChunkStore {
                 chunks.stream().map(PolicyChunk::text).toList(),
                 EmbeddingInputType.PASSAGE
             );
+            validateEmbeddingCount(chunks, embeddings);
 
             jdbcTemplate.batchUpdate(insertSql, new BatchPreparedStatementSetter() {
                 @Override
@@ -94,6 +95,17 @@ final class JdbcPolicyChunkStore implements PolicyChunkStore {
                 }
             });
         });
+    }
+
+    private static void validateEmbeddingCount(List<PolicyChunk> chunks, List<float[]> embeddings) {
+        if (!embeddings.isEmpty() && embeddings.size() != chunks.size()) {
+            throw new IllegalStateException(
+                "Embedding model returned %d embeddings for %d policy chunks".formatted(
+                    embeddings.size(),
+                    chunks.size()
+                )
+            );
+        }
     }
 
     private static Array textArray(PreparedStatement statement, List<String> values) throws SQLException {

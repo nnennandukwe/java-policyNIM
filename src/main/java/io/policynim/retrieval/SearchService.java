@@ -44,6 +44,10 @@ public class SearchService {
     }
 
     private List<ScoredPolicyChunk> retrieveCandidates(SearchRequest request) {
+        if (!hasSearchableRows()) {
+            return readStore.search(request.query(), request.domain(), request.topK());
+        }
+
         List<float[]> queryEmbeddings = embeddingModel.embed(List.of(request.query()), EmbeddingInputType.QUERY);
         if (!queryEmbeddings.isEmpty()) {
             List<ScoredPolicyChunk> semanticCandidates = readStore.searchByEmbedding(
@@ -56,6 +60,10 @@ public class SearchService {
             }
         }
         return readStore.search(request.query(), request.domain(), request.topK());
+    }
+
+    private boolean hasSearchableRows() {
+        return readStore.exists() && readStore.rowCount() > 0;
     }
 
     private List<ScoredPolicyChunk> rerankCandidates(String query, int topK, List<ScoredPolicyChunk> candidates) {
@@ -91,6 +99,15 @@ public class SearchService {
             if (reordered.size() == topK) {
                 return List.copyOf(reordered);
             }
+        }
+        for (int index = 0; index < candidates.size() && reordered.size() < topK; index++) {
+            if (seenIndexes.add(index)) {
+                reordered.add(candidates.get(index));
+            }
+        }
+
+        if (reordered.isEmpty()) {
+            return candidates.stream().limit(topK).toList();
         }
         return List.copyOf(reordered);
     }
