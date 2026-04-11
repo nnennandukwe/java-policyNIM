@@ -4,6 +4,9 @@ import io.policynim.config.PolicyNimProperties;
 import io.policynim.mcp.health.HealthCheckResponse;
 import io.policynim.mcp.health.RuntimeReadinessService;
 import io.policynim.mcp.telemetry.McpTelemetry;
+import io.policynim.preflight.PreflightRequest;
+import io.policynim.preflight.PreflightResult;
+import io.policynim.preflight.PreflightService;
 import io.policynim.retrieval.SearchRequest;
 import io.policynim.retrieval.SearchResult;
 import io.policynim.retrieval.SearchService;
@@ -17,17 +20,20 @@ import java.util.Objects;
 public class PolicyMcpTools {
 
     private final SearchService searchService;
+    private final PreflightService preflightService;
     private final PolicyNimProperties properties;
     private final RuntimeReadinessService readinessService;
     private final McpTelemetry telemetry;
 
     public PolicyMcpTools(
         SearchService searchService,
+        PreflightService preflightService,
         PolicyNimProperties properties,
         RuntimeReadinessService readinessService,
         McpTelemetry telemetry
     ) {
         this.searchService = Objects.requireNonNull(searchService, "searchService must not be null");
+        this.preflightService = Objects.requireNonNull(preflightService, "preflightService must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.readinessService = Objects.requireNonNull(readinessService, "readinessService must not be null");
         this.telemetry = Objects.requireNonNull(telemetry, "telemetry must not be null");
@@ -42,6 +48,18 @@ public class PolicyMcpTools {
         return telemetry.recordToolInvocation("policy_search", () -> {
             guardRuntimeReady("policy_search");
             return searchService.search(new SearchRequest(query, domain, resolveTopK(topK)));
+        });
+    }
+
+    @Tool(name = "policy_preflight", description = "Run grounded PolicyNIM preflight for a coding task.")
+    public PreflightResult policyPreflight(
+        @ToolParam(description = "The coding task that needs policy guidance.") String task,
+        @ToolParam(required = false, description = "Optional policy domain filter.") String domain,
+        @ToolParam(required = false, description = "Maximum number of evidence hits to use.") Integer topK
+    ) {
+        return telemetry.recordToolInvocation("policy_preflight", () -> {
+            guardRuntimeReady("policy_preflight");
+            return preflightService.preflight(new PreflightRequest(task, domain, resolveTopK(topK)));
         });
     }
 
