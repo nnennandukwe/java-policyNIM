@@ -68,11 +68,7 @@ public class PreflightService {
             return PreflightResult.insufficientContext(request);
         }
 
-        List<String> citationIds = orderedUnique(draft.citationIds().isEmpty()
-            ? draft.applicablePolicies().stream()
-                .flatMap(policy -> policy.citationIds().stream())
-                .toList()
-            : draft.citationIds());
+        List<String> citationIds = materializedCitationIds(draft);
         if (citationIds.isEmpty() || containsUnknownCitation(citationIds, contextById)) {
             return PreflightResult.insufficientContext(request);
         }
@@ -151,6 +147,19 @@ public class PreflightService {
         Map<String, ScoredPolicyChunk> contextById
     ) {
         return citationIds.stream().anyMatch(citationId -> !contextById.containsKey(citationId));
+    }
+
+    private static List<String> materializedCitationIds(GeneratedPreflightDraft draft) {
+        List<String> policyCitationIds = draft.applicablePolicies().stream()
+            .flatMap(policy -> policy.citationIds().stream())
+            .toList();
+        if (draft.citationIds().isEmpty()) {
+            return orderedUnique(policyCitationIds);
+        }
+
+        List<String> citationIds = new ArrayList<>(draft.citationIds());
+        citationIds.addAll(policyCitationIds);
+        return orderedUnique(citationIds);
     }
 
     private static List<String> orderedUnique(List<String> values) {

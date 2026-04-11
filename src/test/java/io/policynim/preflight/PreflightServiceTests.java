@@ -77,6 +77,48 @@ class PreflightServiceTests {
     }
 
     @Test
+    void materializesPolicyCitationsMissingFromTopLevelCitationList() {
+        SearchService searchService = mock(SearchService.class);
+        given(searchService.search(new SearchRequest("add request ids to logs", "backend", 2))).willReturn(
+            new SearchResult(
+                "add request ids to logs",
+                "backend",
+                2,
+                List.of(
+                    scoredChunk("BACKEND-1", "BACKEND-LOG-001", "Logging", "backend"),
+                    scoredChunk("BACKEND-2", "BACKEND-LOG-001", "Logging", "backend")
+                ),
+                false
+            )
+        );
+        RecordingPreflightGenerator generator = new RecordingPreflightGenerator(
+            new GeneratedPreflightDraft(
+                "Use request ids in backend logs.",
+                List.of(new GeneratedPolicyGuidance(
+                    "BACKEND-LOG-001",
+                    "Logging",
+                    "The retrieved policy requires request ids.",
+                    List.of("BACKEND-2")
+                )),
+                List.of("Thread the request id through the job boundary."),
+                List.of("Log request ids with every backend event."),
+                List.of("Avoid unstructured log statements."),
+                List.of("Add a logging regression test."),
+                List.of("BACKEND-1"),
+                false
+            )
+        );
+        PreflightService service = new PreflightService(searchService, generator);
+
+        PreflightResult result = service.preflight(new PreflightRequest("add request ids to logs", "backend", 2));
+
+        assertThat(result.insufficientContext()).isFalse();
+        assertThat(result.applicablePolicies().getFirst().citationIds()).containsExactly("BACKEND-2");
+        assertThat(result.citations()).extracting(Citation::chunkId)
+            .containsExactly("BACKEND-1", "BACKEND-2");
+    }
+
+    @Test
     void failsClosedWhenGeneratedCitationIsNotInRetrievedEvidence() {
         SearchService searchService = mock(SearchService.class);
         given(searchService.search(new SearchRequest("backend guidance", null, 1))).willReturn(
