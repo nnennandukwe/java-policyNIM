@@ -79,12 +79,13 @@ public class PreflightService {
             if (policyCitationIds.isEmpty()) {
                 continue;
             }
-            if (containsUnknownCitation(policyCitationIds, contextById)) {
+            PolicyMetadata policyMetadata = resolvePolicyMetadata(policyCitationIds, contextById);
+            if (policyMetadata == null) {
                 return PreflightResult.insufficientContext(request);
             }
             applicablePolicies.add(new PolicyGuidance(
-                policy.policyId(),
-                policy.title(),
+                policyMetadata.policyId(),
+                policyMetadata.title(),
                 policy.rationale(),
                 policyCitationIds
             ));
@@ -147,6 +148,33 @@ public class PreflightService {
         Map<String, ScoredPolicyChunk> contextById
     ) {
         return citationIds.stream().anyMatch(citationId -> !contextById.containsKey(citationId));
+    }
+
+    private static PolicyMetadata resolvePolicyMetadata(
+        List<String> citationIds,
+        Map<String, ScoredPolicyChunk> contextById
+    ) {
+        PolicyMetadata resolved = null;
+        for (String citationId : citationIds) {
+            ScoredPolicyChunk chunk = contextById.get(citationId);
+            if (chunk == null || chunk.policy() == null) {
+                return null;
+            }
+            PolicyMetadata candidate = chunk.policy();
+            if (resolved == null) {
+                resolved = candidate;
+                continue;
+            }
+            if (!samePolicyMetadata(resolved, candidate)) {
+                return null;
+            }
+        }
+        return resolved;
+    }
+
+    private static boolean samePolicyMetadata(PolicyMetadata left, PolicyMetadata right) {
+        return Objects.equals(left.policyId(), right.policyId())
+            && Objects.equals(left.title(), right.title());
     }
 
     private static List<String> materializedCitationIds(GeneratedPreflightDraft draft) {

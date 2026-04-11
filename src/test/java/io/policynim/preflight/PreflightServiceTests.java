@@ -119,6 +119,56 @@ class PreflightServiceTests {
     }
 
     @Test
+    void derivesPolicyMetadataFromCitedEvidenceWhenGeneratedMetadataMismatches() {
+        SearchService searchService = mock(SearchService.class);
+        given(searchService.search(new SearchRequest("add request ids to logs", "backend", 1))).willReturn(
+            new SearchResult(
+                "add request ids to logs",
+                "backend",
+                1,
+                List.of(scoredChunk("BACKEND-1", "BACKEND-LOG-001", "Logging", "backend")),
+                false
+            )
+        );
+        RecordingPreflightGenerator generator = new RecordingPreflightGenerator(
+            new GeneratedPreflightDraft(
+                "Use request ids in backend logs.",
+                List.of(new GeneratedPolicyGuidance(
+                    "MODEL-INVENTED-ID",
+                    "Model Invented Title",
+                    "The retrieved policy requires request ids.",
+                    List.of("BACKEND-1")
+                )),
+                List.of("Thread the request id through the job boundary."),
+                List.of("Log request ids with every backend event."),
+                List.of("Avoid unstructured log statements."),
+                List.of("Add a logging regression test."),
+                List.of("BACKEND-1"),
+                false
+            )
+        );
+        PreflightService service = new PreflightService(searchService, generator);
+
+        PreflightResult result = service.preflight(new PreflightRequest("add request ids to logs", "backend", 1));
+
+        assertThat(result.insufficientContext()).isFalse();
+        assertThat(result.applicablePolicies()).containsExactly(new PolicyGuidance(
+            "BACKEND-LOG-001",
+            "Logging",
+            "The retrieved policy requires request ids.",
+            List.of("BACKEND-1")
+        ));
+        assertThat(result.citations()).containsExactly(new Citation(
+            "BACKEND-LOG-001",
+            "Logging",
+            "policies/backend/logging.md",
+            "Logging > Rules",
+            "5-8",
+            "BACKEND-1"
+        ));
+    }
+
+    @Test
     void failsClosedWhenGeneratedCitationIsNotInRetrievedEvidence() {
         SearchService searchService = mock(SearchService.class);
         given(searchService.search(new SearchRequest("backend guidance", null, 1))).willReturn(
