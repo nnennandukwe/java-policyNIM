@@ -1,12 +1,14 @@
 package io.policynim.preflight;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.springframework.lang.Nullable;
 
 import java.util.List;
 import java.util.Objects;
 
 public record PreflightResult(
     String task,
+    @Nullable
     String domain,
     String summary,
     @JsonProperty("applicable_policies") List<PolicyGuidance> applicablePolicies,

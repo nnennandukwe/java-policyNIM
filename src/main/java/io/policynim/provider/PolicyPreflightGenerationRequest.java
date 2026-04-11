@@ -1,10 +1,13 @@
 package io.policynim.provider;
 
+import org.springframework.lang.Nullable;
+
 import java.util.List;
 import java.util.Objects;
 
 public record PolicyPreflightGenerationRequest(
     String task,
+    @Nullable
     String domain,
     int topK,
     List<PolicyGroundingEvidence> evidence
