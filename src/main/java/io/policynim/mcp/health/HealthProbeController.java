@@ -6,11 +6,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-public class HealthzController {
+public class HealthProbeController {
 
     private final RuntimeReadinessService runtimeReadinessService;
 
-    public HealthzController(RuntimeReadinessService runtimeReadinessService) {
+    public HealthProbeController(RuntimeReadinessService runtimeReadinessService) {
         this.runtimeReadinessService = runtimeReadinessService;
     }
 
