@@ -29,7 +29,7 @@ The default runtime is offline from live providers: NVIDIA-backed embedding, rer
 Build the application jar, configure JDBC storage, then populate the policy chunk table:
 
 ```bash
-java -jar target/policynim.jar ingest --corpus-root=/absolute/path/to/policies \
+java -jar <path-to-policynim.jar> ingest --corpus-root=/absolute/path/to/policies \
   --policynim.storage.mode=jdbc \
   --spring.datasource.url=jdbc:postgresql://localhost:5432/policynim \
   --spring.datasource.username=policynim \

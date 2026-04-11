@@ -13,9 +13,9 @@ public final class IngestCommandLine {
 
     public static final String COMMAND_NAME = "ingest";
     public static final String COMMAND_EXAMPLE =
-        "java -jar target/policynim.jar ingest --corpus-root=/absolute/path/to/policies";
+        "java -jar <path-to-policynim.jar> ingest --corpus-root=/absolute/path/to/policies";
     public static final String USAGE =
-        "Usage: java -jar target/policynim.jar ingest --corpus-root=<path>";
+        "Usage: java -jar <path-to-policynim.jar> ingest --corpus-root=<path>";
 
     private static final String CORPUS_ROOT_OPTION = "corpus-root";
     private static final String HELP_OPTION = "help";
