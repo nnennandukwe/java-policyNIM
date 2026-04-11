@@ -1,6 +1,8 @@
 package io.policynim.mcp.health;
 
 import io.policynim.config.PolicyNimProperties;
+import io.policynim.retrieval.PolicyChunkReadStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -8,7 +10,13 @@ import org.springframework.context.annotation.Configuration;
 public class RuntimeReadinessConfiguration {
 
     @Bean
-    RuntimeReadinessService runtimeReadinessService(PolicyNimProperties properties) {
-        return new BootstrapRuntimeReadinessService(properties);
+    RuntimeReadinessService runtimeReadinessService(
+        PolicyNimProperties properties,
+        ObjectProvider<PolicyChunkReadStore> readStoreProvider
+    ) {
+        return new StorageRuntimeReadinessService(
+            properties,
+            readStoreProvider.getIfAvailable(PolicyChunkReadStore::noOp)
+        );
     }
 }
