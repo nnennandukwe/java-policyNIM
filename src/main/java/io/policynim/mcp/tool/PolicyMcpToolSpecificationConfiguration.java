@@ -16,6 +16,9 @@ import java.util.function.Supplier;
 @Configuration(proxyBeanMethods = false)
 public class PolicyMcpToolSpecificationConfiguration {
 
+    private static final String INTERNAL_TOOL_ERROR_MESSAGE =
+        "PolicyNIM tool invocation failed. See server logs for details.";
+
     @Bean
     List<McpServerFeatures.SyncToolSpecification> policySyncToolSpecifications(
         PolicyMcpTools tools,
@@ -37,6 +40,26 @@ public class PolicyMcpToolSpecificationConfiguration {
                     objectMapper,
                     () -> tools.policySearch(
                         requiredString(arguments, "query"),
+                        optionalString(arguments, "domain"),
+                        optionalInteger(arguments, "topK")
+                    )
+                )
+            ),
+            new McpServerFeatures.SyncToolSpecification(
+                tool(
+                    "policy_preflight",
+                    "Run grounded PolicyNIM preflight for a coding task.",
+                    "task",
+                    Map.of(
+                        "task", stringProperty("The coding task that needs policy guidance."),
+                        "domain", stringProperty("Optional policy domain filter."),
+                        "topK", integerProperty("Maximum number of evidence hits to use.")
+                    )
+                ),
+                (exchange, arguments) -> invokeTool(
+                    objectMapper,
+                    () -> tools.policyPreflight(
+                        requiredString(arguments, "task"),
                         optionalString(arguments, "domain"),
                         optionalInteger(arguments, "topK")
                     )
@@ -105,6 +128,9 @@ public class PolicyMcpToolSpecificationConfiguration {
         }
         catch (McpToolInvocationException | IllegalArgumentException exception) {
             return toolError(exception.getMessage());
+        }
+        catch (RuntimeException exception) {
+            return toolError(INTERNAL_TOOL_ERROR_MESSAGE);
         }
     }
 

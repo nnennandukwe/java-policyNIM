@@ -1,6 +1,8 @@
 package io.policynim.provider.nvidia;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.policynim.provider.PolicyEmbeddingModel;
+import io.policynim.provider.PolicyPreflightGenerator;
 import io.policynim.provider.PolicyReranker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -32,6 +34,17 @@ class NvidiaProviderConfiguration {
     PolicyReranker policyReranker(RestClient.Builder restClientBuilder, NvidiaProviderProperties properties) {
         validateApiKey(properties);
         return new NvidiaReranker(restClientBuilder, properties);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "policynim.provider.nvidia", name = "enabled", havingValue = "true")
+    PolicyPreflightGenerator policyPreflightGenerator(
+        RestClient.Builder restClientBuilder,
+        NvidiaProviderProperties properties,
+        ObjectMapper objectMapper
+    ) {
+        validateApiKey(properties);
+        return new NvidiaPreflightGenerator(restClientBuilder, properties, objectMapper);
     }
 
     private static void validateApiKey(NvidiaProviderProperties properties) {
