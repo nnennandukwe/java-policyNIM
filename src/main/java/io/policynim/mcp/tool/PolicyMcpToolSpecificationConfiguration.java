@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 @Configuration(proxyBeanMethods = false)
 public class PolicyMcpToolSpecificationConfiguration {
@@ -32,9 +33,9 @@ public class PolicyMcpToolSpecificationConfiguration {
                         "topK", integerProperty("Maximum number of hits to return.")
                     )
                 ),
-                (exchange, arguments) -> toolResult(
+                (exchange, arguments) -> invokeTool(
                     objectMapper,
-                    tools.policySearch(
+                    () -> tools.policySearch(
                         requiredString(arguments, "query"),
                         optionalString(arguments, "domain"),
                         optionalInteger(arguments, "topK")
@@ -96,6 +97,24 @@ public class PolicyMcpToolSpecificationConfiguration {
         catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize MCP tool payload.", exception);
         }
+    }
+
+    private static McpSchema.CallToolResult invokeTool(ObjectMapper objectMapper, Supplier<Object> invocation) {
+        try {
+            return toolResult(objectMapper, invocation.get());
+        }
+        catch (McpToolInvocationException | IllegalArgumentException exception) {
+            return toolError(exception.getMessage());
+        }
+    }
+
+    private static McpSchema.CallToolResult toolError(String message) {
+        Map<String, Object> structuredContent = Map.of("error", message);
+        return McpSchema.CallToolResult.builder()
+            .structuredContent(structuredContent)
+            .addTextContent(message)
+            .isError(true)
+            .build();
     }
 
     private static String requiredString(Map<String, Object> arguments, String key) {

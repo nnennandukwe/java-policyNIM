@@ -19,6 +19,8 @@ class PolicyNimPropertiesBindingTest {
                 "policynim.mcp.port=9090",
                 "policynim.mcp.streamable-http-path=/custom-mcp",
                 "policynim.mcp.public-base-url=https://example.com/platform/",
+                "policynim.mcp.auth.enabled=true",
+                "policynim.mcp.auth.bearer-token=test-token",
                 "policynim.storage.mode=jdbc",
                 "policynim.storage.table-name=bootstrap_chunks"
             )
@@ -29,6 +31,8 @@ class PolicyNimPropertiesBindingTest {
                 assertThat(properties.getMcp().getPort()).isEqualTo(9090);
                 assertThat(properties.getMcp().getStreamableHttpPath()).isEqualTo("/custom-mcp");
                 assertThat(properties.getMcp().mcpUrl()).isEqualTo("https://example.com/platform/custom-mcp");
+                assertThat(properties.getMcp().getAuth().isEnabled()).isTrue();
+                assertThat(properties.getMcp().getAuth().getBearerToken()).isEqualTo("test-token");
                 assertThat(properties.getStorage().getMode()).isEqualTo(PolicyNimProperties.StorageMode.JDBC);
                 assertThat(properties.getStorage().getTableName()).isEqualTo("bootstrap_chunks");
             });

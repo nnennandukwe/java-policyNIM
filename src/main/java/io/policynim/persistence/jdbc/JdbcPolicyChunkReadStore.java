@@ -26,11 +26,13 @@ final class JdbcPolicyChunkReadStore implements PolicyChunkReadStore {
     private final JdbcTemplate jdbcTemplate;
     private final String tableName;
     private final String rowCountSql;
+    private final String hasRowsSql;
 
     JdbcPolicyChunkReadStore(JdbcTemplate jdbcTemplate, String tableName) {
         this.jdbcTemplate = Objects.requireNonNull(jdbcTemplate, "jdbcTemplate must not be null");
         this.tableName = validateTableName(tableName);
         this.rowCountSql = "SELECT COUNT(*) FROM " + this.tableName;
+        this.hasRowsSql = "SELECT EXISTS (SELECT 1 FROM " + this.tableName + " LIMIT 1)";
     }
 
     @Override
@@ -52,11 +54,17 @@ final class JdbcPolicyChunkReadStore implements PolicyChunkReadStore {
 
     @Override
     public long rowCount() {
-        if (!exists()) {
-            return 0;
-        }
         Long count = jdbcTemplate.queryForObject(rowCountSql, Long.class);
         return count == null ? 0 : count;
+    }
+
+    @Override
+    public boolean hasRows() {
+        if (!exists()) {
+            return false;
+        }
+        Boolean hasRows = jdbcTemplate.queryForObject(hasRowsSql, Boolean.class);
+        return Boolean.TRUE.equals(hasRows);
     }
 
     @Override

@@ -59,6 +59,10 @@ public class PolicyNimProperties {
 
         private URI publicBaseUrl;
 
+        @Valid
+        @NotNull
+        private final AuthProperties auth = new AuthProperties();
+
         public String getName() {
             return name;
         }
@@ -121,6 +125,33 @@ public class PolicyNimProperties {
             }
             String base = publicBaseUrl.toString().replaceAll("/+$", "");
             return base + streamableHttpPath;
+        }
+
+        public AuthProperties getAuth() {
+            return auth;
+        }
+    }
+
+    public static final class AuthProperties {
+
+        private boolean enabled;
+
+        private String bearerToken = "";
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getBearerToken() {
+            return bearerToken;
+        }
+
+        public void setBearerToken(String bearerToken) {
+            this.bearerToken = bearerToken;
         }
     }
 

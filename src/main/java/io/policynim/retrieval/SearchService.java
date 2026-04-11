@@ -63,7 +63,7 @@ public class SearchService {
     }
 
     private boolean hasSearchableRows() {
-        return readStore.exists() && readStore.rowCount() > 0;
+        return readStore.hasRows();
     }
 
     private List<ScoredPolicyChunk> rerankCandidates(String query, int topK, List<ScoredPolicyChunk> candidates) {
