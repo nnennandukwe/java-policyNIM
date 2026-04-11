@@ -8,6 +8,8 @@ import org.springframework.validation.annotation.Validated;
 @ConfigurationProperties(prefix = "policynim.provider.nvidia")
 public class NvidiaProviderProperties {
 
+    static final String DEFAULT_CHAT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5";
+
     private boolean enabled;
 
     private String apiKey = "";
@@ -21,6 +23,9 @@ public class NvidiaProviderProperties {
     @NotBlank
     private String rerankModel = "nvidia/llama-nemotron-rerank-1b-v2";
 
+    @NotBlank
+    private String chatModel = DEFAULT_CHAT_MODEL;
+
     public NvidiaProviderProperties() {
     }
 
@@ -31,11 +36,23 @@ public class NvidiaProviderProperties {
         String embeddingModel,
         String rerankModel
     ) {
+        this(enabled, apiKey, baseUrl, embeddingModel, rerankModel, DEFAULT_CHAT_MODEL);
+    }
+
+    public NvidiaProviderProperties(
+        boolean enabled,
+        String apiKey,
+        String baseUrl,
+        String embeddingModel,
+        String rerankModel,
+        String chatModel
+    ) {
         this.enabled = enabled;
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.embeddingModel = embeddingModel;
         this.rerankModel = rerankModel;
+        this.chatModel = chatModel;
     }
 
     public boolean isEnabled() {
@@ -76,5 +93,13 @@ public class NvidiaProviderProperties {
 
     public void setRerankModel(String rerankModel) {
         this.rerankModel = rerankModel;
+    }
+
+    public String getChatModel() {
+        return chatModel;
+    }
+
+    public void setChatModel(String chatModel) {
+        this.chatModel = chatModel;
     }
 }
