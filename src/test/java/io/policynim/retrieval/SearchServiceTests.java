@@ -120,6 +120,64 @@ class SearchServiceTests {
     }
 
     @Test
+    void rerankDeduplicatesRepeatedIndexesAndAppendsRemainingCandidates() {
+        StubPolicyChunkReadStore readStore = new StubPolicyChunkReadStore(
+            List.of(
+                scoredChunk("POLICY-001:first", "First", "First match.", "POLICY-001", "First", 10.0),
+                scoredChunk("POLICY-002:second", "Second", "Second match.", "POLICY-002", "Second", 9.0),
+                scoredChunk("POLICY-003:third", "Third", "Third match.", "POLICY-003", "Third", 8.0)
+            )
+        );
+        StubPolicyReranker reranker = new StubPolicyReranker(
+            List.of(
+                new RerankResult(1, 99.0d),
+                new RerankResult(1, 50.0d),
+                new RerankResult(0, 40.0d)
+            )
+        );
+        SearchService service = new SearchService(readStore, PolicyEmbeddingModel.noOp(), reranker);
+
+        SearchResult result = service.search(new SearchRequest("match", "backend", 3));
+
+        assertThat(result.insufficientContext()).isFalse();
+        assertThat(result.hits()).extracting(ScoredPolicyChunk::chunkId).containsExactly(
+            "POLICY-002:second",
+            "POLICY-001:first",
+            "POLICY-003:third"
+        );
+        assertThat(result.hits()).extracting(ScoredPolicyChunk::score).containsExactly(99.0d, 40.0d, 8.0d);
+    }
+
+    @Test
+    void rerankSkipsInvalidIndexesAndAppendsRemainingCandidates() {
+        StubPolicyChunkReadStore readStore = new StubPolicyChunkReadStore(
+            List.of(
+                scoredChunk("POLICY-001:first", "First", "First match.", "POLICY-001", "First", 10.0),
+                scoredChunk("POLICY-002:second", "Second", "Second match.", "POLICY-002", "Second", 9.0),
+                scoredChunk("POLICY-003:third", "Third", "Third match.", "POLICY-003", "Third", 8.0),
+                scoredChunk("POLICY-004:fourth", "Fourth", "Fourth match.", "POLICY-004", "Fourth", 7.0)
+            )
+        );
+        StubPolicyReranker reranker = new StubPolicyReranker(
+            List.of(
+                new RerankResult(7, 99.0d),
+                new RerankResult(2, 50.0d)
+            )
+        );
+        SearchService service = new SearchService(readStore, PolicyEmbeddingModel.noOp(), reranker);
+
+        SearchResult result = service.search(new SearchRequest("match", "backend", 3));
+
+        assertThat(result.insufficientContext()).isFalse();
+        assertThat(result.hits()).extracting(ScoredPolicyChunk::chunkId).containsExactly(
+            "POLICY-003:third",
+            "POLICY-001:first",
+            "POLICY-002:second"
+        );
+        assertThat(result.hits()).extracting(ScoredPolicyChunk::score).containsExactly(50.0d, 10.0d, 9.0d);
+    }
+
+    @Test
     void skipsEmbeddingWhenReadStoreHasNoRows() {
         StubPolicyChunkReadStore readStore = new StubPolicyChunkReadStore(List.of());
         StubPolicyEmbeddingModel embeddingModel = new StubPolicyEmbeddingModel(new float[] {0.5f});
