@@ -68,6 +68,16 @@ export POLICYNIM_PROVIDER_NVIDIA_ENABLED=true
 export POLICYNIM_PROVIDER_NVIDIA_API_KEY=replace-with-runtime-secret
 ```
 
+## Ingest Policies
+
+After JDBC storage is configured, load the policy corpus before serving MCP traffic:
+
+```bash
+java -jar target/policynim.jar ingest --corpus-root=/absolute/path/to/policies
+```
+
+The command exits after writing policy chunks to the configured JDBC store. Use an absolute corpus path in hosted environments so the runtime path is independent of the launch directory.
+
 ## Container Run
 
 ```bash

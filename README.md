@@ -24,6 +24,20 @@ Project docs:
 
 The default runtime is offline from live providers: NVIDIA-backed embedding, rerank, and preflight generation are disabled unless explicitly enabled.
 
+## Policy Ingest
+
+Build the application jar, configure JDBC storage, then populate the policy chunk table:
+
+```bash
+java -jar target/policynim.jar ingest --corpus-root=/absolute/path/to/policies \
+  --policynim.storage.mode=jdbc \
+  --spring.datasource.url=jdbc:postgresql://localhost:5432/policynim \
+  --spring.datasource.username=policynim \
+  --spring.datasource.password=policynim
+```
+
+The ingest command exits after loading the corpus and does not start the hosted MCP web server.
+
 ## Packaging
 
 Build the application jar:
