@@ -18,10 +18,8 @@ jobs:
       matrix:
         include:
           - os: macos-15
-            shell: bash
             wrapper: ./mvnw
           - os: windows-2025
-            shell: pwsh
             wrapper: .\mvnw.cmd
     env:
       POLICYNIM_PROVIDER_NVIDIA_ENABLED: "false"
@@ -35,11 +33,8 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Verify pack file access on the host
-        shell: ${{ matrix.shell }}
         run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests" test
       - name: Package the installed jar
-        shell: ${{ matrix.shell }}
         run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
       - name: Inspect an explicit pack through the installed jar
-        shell: ${{ matrix.shell }}
         run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dit.test=PackagedExplicitPackIT" failsafe:integration-test failsafe:verify
