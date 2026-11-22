@@ -40,7 +40,7 @@ class CatalogCommand:
     product: str
     program: list[str]
     cwd: Path
-    root: Path
+    root: Path | None
     env: dict[str, str]
 
     def at_root(self, root, **environment):
@@ -55,7 +55,7 @@ class CatalogCommand:
         args = [*self.program, "policies", *arguments]
         if source:
             args.append("--source")
-            if self.product == "java":
+            if self.product == "java" and self.root is not None:
                 args.extend(["--corpus-root", str(self.root)] if separate_root else [f"--corpus-root={self.root}"])
         return subprocess.run(args, env=self.env, cwd=self.cwd, capture_output=True, timeout=15, check=False)
 
