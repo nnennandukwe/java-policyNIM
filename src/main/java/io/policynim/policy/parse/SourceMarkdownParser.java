@@ -32,8 +32,8 @@ public final class SourceMarkdownParser {
         return parseSource(sourcePath, text).document();
     }
 
-    public ParsedPolicyDocument parsePackMember(String sourcePath, String text) {
-        return parseSource(sourcePath, text, true).document();
+    public ParsedSource parsePackMember(String sourcePath, String text) {
+        return parseSource(sourcePath, text, true);
     }
 
     public ParsedSource parseSource(String sourcePath, String text) {

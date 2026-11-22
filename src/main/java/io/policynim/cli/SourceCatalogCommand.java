@@ -80,7 +80,7 @@ public final class SourceCatalogCommand {
             JsonNode policy = view.get("policy");
             output.printf("%s: %s%nScope: source; generation: unknown%nSource: %s; state: %s%n",
                 policy.get("policy_id").textValue(), policy.get("title").textValue(),
-                view.get("path").textValue(), view.get("state").textValue());
+                pathForDisplay(view.get("path").textValue()), view.get("state").textValue());
             JsonNode provenance = policy.get("provenance");
             output.printf("Revision: %s%nGrounding: %s%n", provenance.get("content_digest").textValue(),
                 provenance.get("grounding_kind").textValue());
@@ -96,7 +96,7 @@ public final class SourceCatalogCommand {
             output.println("Validation checks structure and declared metadata; it doesn't certify compliance.");
             if (!unlisted.isEmpty()) {
                 List<String> paths = new ArrayList<>();
-                unlisted.forEach(path -> paths.add(path.textValue()));
+                unlisted.forEach(path -> paths.add(pathForDisplay(path.textValue())));
                 output.println("Unlisted Markdown (not selected): " + String.join(", ", paths));
             }
             return;
@@ -114,6 +114,23 @@ public final class SourceCatalogCommand {
                 + "Run `java -jar <jar> policies validate --source --corpus-root=<path> --format json` for their paths.%n",
                 unlisted.size());
         }
+    }
+
+    private static String pathForDisplay(String path) {
+        var display = new StringBuilder(path.length());
+        path.codePoints().forEach(point -> {
+            switch (Character.getType(point)) {
+                case Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR ->
+                    display.append((point <= Character.MAX_VALUE ? "\\u%04x" : "\\U%08x").formatted(point));
+                default -> {
+                    if (point == '\\') {
+                        display.append('\\');
+                    }
+                    display.appendCodePoint(point);
+                }
+            }
+        });
+        return display.toString();
     }
 
     private record Options(String command, String policyId, Path root, boolean json, boolean help) {

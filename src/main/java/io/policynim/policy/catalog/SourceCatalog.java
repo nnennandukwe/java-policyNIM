@@ -63,7 +63,7 @@ public final class SourceCatalog {
 
         void addPackMember(String path, String sourcePath, byte[] bytes, PolicyPackManifest manifest,
                            PolicyPackManifest.Member member) {
-            var doc = parser.parsePackMember(sourcePath, decode(sourcePath, bytes));
+            var doc = parser.parsePackMember(sourcePath, decode(sourcePath, bytes)).document();
             if (!member.policyId().equals(doc.metadata().policyId())) {
                 throw new InvalidPolicyDocumentException("pack.toml policy_id for " + member.path()
                     + " doesn't match its Markdown policy_id.");

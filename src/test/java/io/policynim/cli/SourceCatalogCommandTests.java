@@ -1,5 +1,6 @@
 package io.policynim.cli;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -8,6 +9,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,6 +21,29 @@ class SourceCatalogCommandTests {
     private int run(String... args) {
         return SourceCatalogCommand.run(args, new PrintStream(out, true, StandardCharsets.UTF_8),
             new PrintStream(err, true, StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void textEscapesUnlistedPathSeparatorsAndJsonPreservesTheFilename(@TempDir Path root) throws Exception {
+        Files.writeString(root.resolve("rule.md"), "---\npolicy_id: RULE\n---\n# Rule\n");
+        Files.writeString(root.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "rules"
+            version = "1.0.0"
+            [[policies]]
+            policy_id = "RULE"
+            path = "rule.md"
+            """);
+        // # non-English test data
+        String filename = "author\u2028notes.md";
+        Files.writeString(root.resolve(filename), "Author notes");
+        assertThat(run("policies", "validate", "--source", "--corpus-root", root.toString())).isZero();
+        assertThat(out.toString(StandardCharsets.UTF_8)).contains("author\\u2028notes.md").doesNotContain(filename);
+        out.reset();
+        assertThat(run("policies", "validate", "--source", "--corpus-root", root.toString(), "--format", "json")).isZero();
+        var json = new ObjectMapper().readTree(out.toByteArray());
+        assertThat(json.at("/unlisted_markdown/0").textValue()).isEqualTo(filename);
+        assertThat(err.size()).isZero();
     }
 
     @Test

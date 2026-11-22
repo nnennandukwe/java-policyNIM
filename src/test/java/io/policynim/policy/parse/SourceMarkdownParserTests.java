@@ -13,7 +13,7 @@ class SourceMarkdownParserTests {
     @Test
     void aPackMemberRetainsBodyLinesWhenItsMetadataIsDeclaredInTheManifest() {
         String policy = "---\npolicy_id: PACK-1\ngrounded_in: [source]\n---\n# Selected\n";
-        var document = parser.parsePackMember("policies/rule.md", policy);
+        var document = parser.parsePackMember("policies/rule.md", policy).document();
         assertThat(document).isEqualTo(parser.parse("policies/rule.md", policy));
         assertThat(document.bodyStartLine()).isEqualTo(5);
         assertThat(document.metadata().groundedIn()).containsExactly("source");
@@ -128,7 +128,9 @@ class SourceMarkdownParserTests {
     void preservesStringMatchersWithHexOrUnderscoreSpellings() {
         String policy = "---\nruntime_rules:\n  - action: file_write\n    effect: block\n"
             + "    reason: Review\n    path_globs: [%s]\n---\n# Source\n";
-        var rule = parser.parseSource("policies/a.md", policy.formatted("0x10, 1_000")).rules().getFirst();
+        var source = parser.parseSource("policies/a.md", policy.formatted("0x10, 1_000"));
+        assertThat(parser.parsePackMember("policies/a.md", policy.formatted("0x10, 1_000"))).isEqualTo(source);
+        var rule = source.rules().getFirst();
         assertThat(rule.pathGlobs()).containsExactly("0x10", "1_000");
         assertThatThrownBy(() -> parser.parse("policies/a.md", policy.formatted("1000")))
             .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("line 6");

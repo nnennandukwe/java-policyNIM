@@ -59,6 +59,12 @@
       }
     ]
   },
+  "runtime_rule": {
+    "frontmatter": "runtime_rules:\n  - action: file_write\n    effect: confirm\n    reason: Review documentation updates.\n    path_globs: [\"docs/**\"]\n",
+    "source_digest": "sha256:c32e0e0af66272968da0bc25fe62512623e0b84ac4ab9f18f783d61b4aa86748",
+    "target_digest": "sha256:546200d86d65a6ea4038da3c9a0fa308f7f7b75aefedc9a3aa54ca4327c57cda",
+    "catalog_digest": "sha256:424f5ecc34d19e3892f2ffa61d8f1c61ac0342da20d65a15ebecaafd1c899f08"
+  },
   "leap_date": {
     "catalog_digest": "sha256:1dc0841666caa5921fb51847f4d82c678862da0e1ab9105aea6bb18ff1e1f550",
     "target_digest": "sha256:9f8274bcecc76b3db11fd2f0757a8574d87c0ff7bdd8239e174e9342284a4c96"
