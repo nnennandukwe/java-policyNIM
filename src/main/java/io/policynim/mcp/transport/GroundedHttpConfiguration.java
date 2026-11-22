@@ -54,7 +54,9 @@ class GroundedHttpConfiguration {
                 legacyServer.tools(legacyTools);
                 modern.feature(ToolsFeature.ofSync(modernTools));
             }
-            legacyServer.serverInfo(identity).instructions(instructions).requestTimeout(settings.requestTimeout())
+            // The stateless SDK returns a tool result with isError for schema-invalid arguments to a known tool.
+            legacyServer.validateToolInputs(true).serverInfo(identity).instructions(instructions)
+                .requestTimeout(settings.requestTimeout())
                 .capabilities(capabilities.build()).immediateExecution(true).build();
             var modernServer = modern.build();
             try {

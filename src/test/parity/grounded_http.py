@@ -88,6 +88,7 @@ async def sdk_round_trip(label, mode, endpoint, token, tools, version):
     """Check negotiation, tool refusals, and discovery with one SDK client."""
     methods = []
     replies = []
+    tool_replies = {}
     issued_session = False
     identity = None
 
@@ -101,7 +102,17 @@ async def sdk_round_trip(label, mode, endpoint, token, tools, version):
         nonlocal issued_session
         issued_session |= "mcp-session-id" in response.headers
         if response.headers.get("content-type", "").startswith("application/json") and await response.aread():
-            replies.append(response.json())
+            frame = response.json()
+            replies.append(frame)
+            request = json.loads(response.request.content)
+            if request.get("method") == "tools/call":
+                tool = request["params"]["name"]
+                require(response.status_code == 200 and frame.get("jsonrpc") == "2.0"
+                        and frame.get("id") == request["id"] and "error" not in frame,
+                        f"{label}/{mode}: expected a correlated HTTP 200 tool result for {tool}")
+                result = frame.get("result", {})
+                require(result.get("isError") is True, f"{label}/{mode}: missing raw tool refusal for {tool}")
+                tool_replies[tool] = result
 
     hooks = {"request": [request_sent], "response": [response_received]}
     async with httpx2.AsyncClient(headers={"Authorization": f"Bearer {token}"}, timeout=5,
@@ -119,6 +130,9 @@ async def sdk_round_trip(label, mode, endpoint, token, tools, version):
                 require(refusal.is_error is True, f"{label}/{mode}: {tool} accepted missing input")
                 detail = " ".join(getattr(block, "text", "") for block in refusal.content)
                 require(field in detail, f"{label}/{mode}: {tool} refusal omitted {field}")
+                raw_text = " ".join(block["text"] for block in tool_replies[tool]["content"]
+                                    if block["type"] == "text")
+                require(raw_text == detail, f"{label}/{mode}: SDK refusal text differs from the raw {tool} result")
             found = {item.name for item in (await client.list_tools()).tools}
             require(found == tools, f"{label}/{mode}: unexpected discovery {sorted(found)}")
     first = {"auto": "server/discover", "legacy": "initialize", MODERN: "tools/call"}[mode]
@@ -129,7 +143,7 @@ async def sdk_round_trip(label, mode, endpoint, token, tools, version):
     if mode != "legacy":
         require(all(r.get("resultType") == "complete" for r in results), f"{label}/{mode}: incomplete result")
     return {"mode": mode, "protocol": expected, "firstMethod": first, "issuedSession": issued_session,
-            "negotiatedServerVersion": identity, "tools": sorted(found)}
+            "negotiatedServerVersion": identity, "tools": sorted(found), "rawToolRefusals": tool_replies}
 
 
 async def raw_round_trip(endpoint, token):

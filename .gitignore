@@ -9,3 +9,4 @@ build/
 .settings/
 *.iml
 .implementation-plan.md
+src/test/parity/__pycache__/

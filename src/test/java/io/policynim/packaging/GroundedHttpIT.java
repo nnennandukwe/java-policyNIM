@@ -65,6 +65,17 @@ class GroundedHttpIT {
             assertJsonWithoutSession(initialized);
             var headers = Map.of("MCP-Protocol-Version", LEGACY);
             assertThat(postJson(http, endpoint, READY, token, headers).statusCode()).isEqualTo(202);
+            var missing = postJson(http, endpoint, """
+                {"jsonrpc":"2.0","id":"missing-query","method":"tools/call",
+                 "params":{"name":"policy_search","arguments":{}}}""", token, headers);
+            assertThat(missing.statusCode()).isEqualTo(200);
+            JsonNode frame = JSON.readTree(missing.body());
+            assertThat(frame.required("jsonrpc").textValue()).isEqualTo("2.0");
+            assertThat(frame.required("id").textValue()).isEqualTo("missing-query");
+            assertThat(frame.has("error")).isFalse();
+            JsonNode refusal = frame.required("result");
+            assertThat(refusal.required("isError").booleanValue()).isTrue();
+            assertThat(refusal.required("content").required(0).required("text").textValue()).contains("query");
             var called = postJson(http, endpoint, LEGACY_SEARCH, token, headers);
             assertReadinessRefusal(PackagedMcpHttp.result(called, 2));
             assertJsonWithoutSession(called);
