@@ -19,6 +19,8 @@ import static java.nio.file.StandardOpenOption.READ;
 
 final class PlainSourceDirectory {
 
+    private static final String ROOT_HINT = " Pass a directory of policy Markdown files with --corpus-root=<path>.";
+
     @FunctionalInterface
     interface SourceFile {
         void accept(String path, String sourcePath, byte[] content);
@@ -46,14 +48,14 @@ final class PlainSourceDirectory {
                     throw new InvalidPolicyDocumentException("Source inspection doesn't support TOML profiles or "
                         + "pack manifests yet. Select a plain policy directory.");
                 }
-                throw new InvalidPolicyDocumentException("Policy root " + selected + " isn't a directory.");
+                throw new InvalidPolicyDocumentException("Policy root " + selected + " isn't a directory." + ROOT_HINT);
             }
             new PlainSourceDirectory(root, reader).visit(root);
             if (!selected.toRealPath().equals(root)) {
                 throw changed(root.getFileName().toString());
             }
         } catch (NoSuchFileException ex) {
-            throw new InvalidPolicyDocumentException("Policy root " + selected + " doesn't exist.", ex);
+            throw new InvalidPolicyDocumentException("Policy root " + selected + " doesn't exist." + ROOT_HINT, ex);
         } catch (IOException | DirectoryIteratorException ex) {
             throw new InvalidPolicyDocumentException("Couldn't inspect policy root " + selected + ".", ex);
         }

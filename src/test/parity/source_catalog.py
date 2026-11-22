@@ -66,14 +66,15 @@ class CatalogCommand:
         return json.loads(result.stdout)
 
     def error(self, *arguments, fragments):
-        """Check the structured failure and its correction hint without depending on absolute root paths."""
+        """Check the failure's cause and recovery text, then retain its public JSON in the receipt."""
         body = self.json(*arguments, exit_code=1)
         message = body.get("message")
-        require(isinstance(message, str) and message.strip() and all(fragment in message for fragment in fragments),
-                f"{self.product} {arguments}: unexpected failure message {message!r}")
+        require(fragments and all(fragments), f"{self.product} {arguments}: expected at least one nonempty error detail")
+        require(isinstance(message, str) and all(fragment in message for fragment in fragments),
+                f"{self.product} {arguments}: expected {fragments!r} in failure message {message!r}")
         match(body, {"status": "error", "scope": "source", "generation_id": None, "message": message},
               f"{self.product} {arguments} failure")
-        return body["status"]
+        return body
 
 
 def validation(catalog):
@@ -112,23 +113,27 @@ def check_text_and_help(cli, catalog):
 
 def check_recovery(cli, fixture):
     """Reject bad files and IDs, restore a healthy catalog, and verify a one-byte source edit."""
-    failures = {"unknownId": cli.error("show", "api-tasks", fragments=["api-tasks", "policies list", "--source"])}
+    hint = ("policynim policies list --source" if cli.product == "python"
+            else "java -jar <jar> policies list --source --corpus-root")
+    failures = {"unknownId": cli.error("show", "api-tasks", fragments=["'api-tasks' isn't in the source catalog", hint])}
     duplicate = cli.root / "duplicate.md"
     duplicate.write_bytes(b"---\npolicy_id: API-TASKS\n---\n# Duplicate\n")
-    failures["duplicateId"] = cli.error("validate", fragments=["API-TASKS", "duplicate.md", "api/tasks.md"])
+    failures["duplicateId"] = cli.error(
+        "validate", fragments=["Duplicate effective policy_id 'API-TASKS'", "duplicate.md", "api/tasks.md"])
     duplicate.unlink()
-    for name, content in (("unreadable.md", b'\xff'), ("incomplete.md", b'---\npolicy_id: SAMPLE\n')):
+    for name, content, cause in (("unreadable.md", b'\xff', "read policy document"),
+                                 ("incomplete.md", b'---\npolicy_id: SAMPLE\n', "starts frontmatter but never closes it")):
         path = cli.root / name
         path.write_bytes(content)
-        failures[name] = cli.error("list", fragments=[name])
+        failures[name] = cli.error("list", fragments=[name, cause])
         path.unlink()
     directory = cli.root / "folder.md"
     directory.mkdir()
-    failures["folder.md"] = cli.error("validate", fragments=["folder.md"])
+    failures["folder.md"] = cli.error("validate", fragments=["read policy document", "folder.md"])
     directory.rmdir()
     dangling = cli.root / "dangling.md"
     dangling.symlink_to("missing-target")
-    failures["dangling.md"] = cli.error("validate", fragments=["dangling.md"])
+    failures["dangling.md"] = cli.error("validate", fragments=["read policy document", "dangling.md"])
     dangling.unlink()
     alias = cli.root / "api" / "alias.md"
     alias.symlink_to("tasks.md")
@@ -217,15 +222,30 @@ def check_quoted_tags_and_display(cli):
     return {"tags": policy["tags"], "path": entry["path"], "revision": revision, "catalogDigest": listed["digest"]}
 
 
-def exercise(cli, fixture):
-    """Compare complete success and error shapes for the same authored files."""
+def check_invalid_roots(cli):
+    """Check the selected path, failure cause and CLI-specific recovery before adding policy files."""
+    if cli.product == "python":
+        missing = ["does not exist", "POLICYNIM_CORPUS_DIR", "override the default corpus location"]
+        non_directory = ["is not a directory", "POLICYNIM_CORPUS_DIR", "directory containing policy Markdown files"]
+        empty = ["Check POLICYNIM_CORPUS_DIR", "pack.toml membership"]
+    else:
+        root_hint = ["Pass a directory of policy Markdown files", "--corpus-root=<path>"]
+        missing = ["doesn't exist", *root_hint]
+        non_directory = ["isn't a directory", *root_hint]
+        empty = ["directory passed to --corpus-root", "contains .md policy files"]
     cli.root.parent.mkdir(parents=True, exist_ok=True)
-    root_errors = {"missing": cli.error("validate", fragments=[cli.root.name])}
+    root_errors = {"missing": cli.error("validate", fragments=[str(cli.root), *missing])}
     cli.root.write_bytes(b"not a directory")
-    root_errors["nonDirectory"] = cli.error("validate", fragments=[cli.root.name])
+    root_errors["nonDirectory"] = cli.error("validate", fragments=[str(cli.root), *non_directory])
     cli.root.unlink()
     cli.root.mkdir()
-    root_errors["empty"] = cli.error("validate", fragments=[])
+    root_errors["empty"] = cli.error("validate", fragments=["source catalog has no policies", *empty])
+    return root_errors
+
+
+def exercise(cli, fixture):
+    """Compare complete success and error shapes for the same authored files."""
+    root_errors = check_invalid_roots(cli)
     write_fixture(cli.root, fixture["files"])
     expected = fixture["catalog"]
     for entry in expected["policies"]:
