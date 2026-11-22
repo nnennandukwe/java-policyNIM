@@ -12,36 +12,12 @@ import tempfile
 from copy import deepcopy
 from importlib import metadata
 from pathlib import Path
-from zipfile import ZipFile
 
+from archived_pack import ARCHIVE_SHA, MANIFEST_SHA, REFERENCE_COMMIT, prepare_aggregate
 from source_catalog import CatalogCommand, match, require, sha256, validation
 
 FIXTURE = Path(__file__).resolve().parents[1] / "resources/parity/catalog/explicit-logging.json"
-ARCHIVE_SHA = "sha256:376ba2727eb73e56696bce91eaf68ac2b6eae20b315a99b87e405cc56a380dce"
-MANIFEST_SHA = "sha256:8e2e50dda6947c9a3bb08f8b6e8420a6107e6438f24e2996b4f03530a6edf1e8"
-ARCHIVED_CATALOG_SHA = "sha256:56674653259895d2aaa56e2b5e97984ef50ca93a55a04dfbbbe8ef4676ea8357"
-AGGREGATE_DIGEST = "sha256:04a26d71f3b54eb63e41e779585177ce397767cdf89da9368de3e92d61667a26"
 SECRET_MARKER = "SYNTHETIC-PACK-MARKER-673"
-
-
-def prepare_aggregate(reference, destination):
-    """Copy the pinned policy tree and verify the archived catalog and each selected file's raw bytes."""
-    transport = reference / "artifacts/public-generation/generation.zip"
-    require(sha256(transport.read_bytes()) == ARCHIVE_SHA, "Unexpected reference generation archive")
-    with ZipFile(transport) as archive:
-        catalog_bytes = archive.read("catalog.json")
-    require(sha256(catalog_bytes) == ARCHIVED_CATALOG_SHA, "Unexpected archived catalog bytes")
-    records = json.loads(catalog_bytes)["policies"]
-    require(len(records) == 26, "The reference archive must contain 26 policy records")
-    shutil.copytree(reference / "policies", destination, symlinks=True)
-    require(sha256((destination / "pack.toml").read_bytes()) == MANIFEST_SHA, "Unexpected aggregate manifest bytes")
-    for record in records:
-        path = destination / record["path"]
-        require(sha256(path.read_bytes()) == record["policy"]["provenance"]["content_digest"],
-                f"Raw bytes differ from the archive for {record['path']}")
-    return {"schema_version": 1, "scope": "source", "generation_id": None, "digest": AGGREGATE_DIGEST,
-            "profile_id": None, "profile_digest": None, "pack_pins": [], "authored_count": 26,
-            "effective_count": 26, "indexed_count": None, "unlisted_markdown": [], "policies": records}
 
 
 def file_digests(root):
@@ -96,6 +72,18 @@ def exercise_selection(cli, fixture):
     match(cli.json("validate")["unlisted_markdown"], with_directory["unlisted_markdown"], "Validation listing")
     markdown_directory.rmdir()
 
+    # non-English test data
+    filename = "author\u2028notes.md"
+    author_note = cli.root / filename
+    author_note.write_bytes(b"Author notes")
+    match(cli.json("validate")["unlisted_markdown"], ["README.md", filename], f"{cli.product} exact filenames")
+    if cli.product == "java":
+        listing = cli.run("validate")
+        require(listing.returncode == 0 and not listing.stderr, "Java text validation failed")
+        require(b"author\\u2028notes.md" in listing.stdout and filename.encode() not in listing.stdout,
+                "Java text validation must keep a filename on one line")
+    author_note.unlink()
+
     selected = cli.root / "policy.md"
     selected.write_bytes(member.replace(b"policy_id:", b"unlisted_field: SYNTHETIC-SOURCE-VALUE\npolicy_id:", 1))
     response = cli.run("list", "--format", "json")
@@ -105,10 +93,21 @@ def exercise_selection(cli, fixture):
     require("unsupported frontmatter keys: unlisted_field" in error["message"], "Missing local source field name")
     match(error, {"status": "error", "scope": "source", "generation_id": None, "message": error["message"]},
           f"{cli.product} unsupported field envelope")
+    rule = fixture["runtime_rule"]
+    with_rule = member.replace(b"policy_id:", rule["frontmatter"].encode("utf-8") + b"policy_id:", 1)
+    require(sha256(with_rule) == rule["source_digest"], "The authored rule fixture changed")
+    selected.write_bytes(with_rule)
+    rule_catalog = deepcopy(expected)
+    rule_entry = rule_catalog["policies"][0]
+    rule_entry["policy"]["provenance"]["content_digest"] = rule["source_digest"]
+    rule_entry["target_digest"] = rule["target_digest"]
+    rule_catalog["digest"] = rule["catalog_digest"]
+    match(cli.json("list"), rule_catalog, f"{cli.product} declared rule catalog")
     selected.write_bytes(member)
     match(cli.json("list"), expected, f"{cli.product} corrected metadata")
     return result | {"sourceDigest": revision, "targetDigest": entry["target_digest"],
-                     "unlistedDirectory": with_directory["unlisted_markdown"], "unsupportedField": "unlisted_field"}
+                     "unlistedDirectory": with_directory["unlisted_markdown"], "unsupportedField": "unlisted_field",
+                     "runtimeRuleCatalogDigest": rule["catalog_digest"]}
 
 
 def check_recovery(cli, fixture):
@@ -267,7 +266,7 @@ def main():
     fixture = json.loads(FIXTURE.read_bytes())
     with jar.open("rb") as artifact:
         digest = hashlib.file_digest(artifact, "sha256").hexdigest()
-    receipt = {"javaJarSha256": digest, "referenceCommit": "fcc5322a6672b0275dcc6e0c299e631df8e8de19",
+    receipt = {"javaJarSha256": digest, "referenceCommit": REFERENCE_COMMIT,
                "pythonVersion": sys.version.split()[0], "fixtureSha256": sha256(FIXTURE.read_bytes()),
                "aggregateManifestSha256": MANIFEST_SHA, "archiveSha256": ARCHIVE_SHA}
     with tempfile.TemporaryDirectory() as temporary, socket.socket() as occupied:
