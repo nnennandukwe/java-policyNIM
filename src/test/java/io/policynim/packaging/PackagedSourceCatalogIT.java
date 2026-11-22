@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -178,6 +179,28 @@ class PackagedSourceCatalogIT {
             Files.delete(config);
             assertTrue(cli.run(fromFile, validate).sourceError().contains("POLICYNIM_CONFIG_FILE"));
             assertEquals(0, cli.run(fromFile, "policies", "validate", "--help").exit());
+        }
+    }
+
+    @Test
+    void malformedSourceDeclarationRequiresAUsableSelection(@TempDir Path directory) throws Exception {
+        Path source = directory.resolve("custom");
+        put(source, "one.md", "---\npolicy_id: OWNED\n---\n# Selected source\n");
+        Path config = Files.writeString(directory.resolve("settings.env"),
+            "POLICYNIM_CORPUS_DIR='private-value' trailing\n", UTF_8);
+        var env = Map.of("POLICYNIM_CONFIG_FILE", config.toString());
+        String[] validate = {"policies", "validate", "--source", "--format=json"};
+        try (var occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            var cli = new CatalogJar(directory, occupied.getLocalPort());
+            String diagnostic = cli.run(env, validate).sourceError();
+            assertTrue(diagnostic.contains("POLICYNIM_CORPUS_DIR"));
+            assertFalse(diagnostic.contains("private-value"));
+            assertEquals(1, cli.run(env, "policies", "validate", "--source", "--format=json",
+                "--corpus-root=" + source).json(0).required("effective_count").intValue());
+            var direct = Map.of("POLICYNIM_CONFIG_FILE", config.toString(), "POLICYNIM_CORPUS_DIR", "../custom");
+            assertEquals(1, cli.run(direct, validate).json(0).required("effective_count").intValue());
+            Files.writeString(config, "POLICYNIM_CORPUS_DIR=../custom\n", UTF_8);
+            assertEquals(1, cli.run(env, validate).json(0).required("effective_count").intValue());
         }
     }
 

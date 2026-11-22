@@ -1,11 +1,13 @@
 package io.policynim.cli;
 
+import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import io.policynim.policy.parse.SourceMarkdownParser;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -30,21 +32,34 @@ record SourceConfigFile(String corpus, String profile) {
         int headerEnd = Math.min(lineEnd(text, 0), 128);
         boolean literal = LITERAL_HEADER.equals(SourceMarkdownParser.strip(text.substring(0, headerEnd)));
         var bindings = new LinkedHashMap<String, String>();
+        var malformedSelectors = new LinkedHashSet<String>();
         var key = KEY.matcher(text);
         for (int start = 0; start < text.length();) {
             int end = lineEnd(text, start);
             if (key.region(start, text.length()).lookingAt()) {
+                String name = key.group(1) == null ? key.group(2) : key.group(1);
+                String setting = name.toLowerCase(Locale.ROOT);
                 Value value = readValue(text, key.end(), key.group(3) != null);
                 if (value != null) {
                     end = lineEnd(text, value.end());
-                    if (COMMENT.matcher(text).region(value.end(), end).matches()) {
-                        String resolved = literal || value.text() == null ? value.text()
-                            : expand(value.text(), bindings, environment);
-                        bindings.put(key.group(1) == null ? key.group(2) : key.group(1), resolved);
-                    }
+                }
+                if (value != null && COMMENT.matcher(text).region(value.end(), end).matches()) {
+                    String resolved = literal || value.text() == null ? value.text()
+                        : expand(value.text(), bindings, environment);
+                    bindings.put(name, resolved);
+                    malformedSelectors.remove(setting);
+                } else if (setting.equals("policynim_corpus_dir") || setting.equals("policynim_profile")) {
+                    malformedSelectors.add(setting);
                 }
             }
             start = end + 1;
+        }
+        for (String name : malformedSelectors) {
+            String setting = name.toUpperCase(Locale.ROOT);
+            if (!environment.containsKey(setting)) {
+                throw new InvalidPolicyDocumentException("Invalid " + setting + " assignment in POLICYNIM_CONFIG_FILE. "
+                    + "Check its quoting or pass --corpus-root=<path>.");
+            }
         }
 
         // Interpolation uses original key spelling. Settings normalize names after all bindings load.

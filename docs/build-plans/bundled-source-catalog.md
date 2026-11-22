@@ -59,6 +59,8 @@ One source selector chooses either an explicit directory or the bundled manifest
 
 Source failures produce exit 1, a single existing JSON source-error envelope on stdout in JSON mode, or actionable text on stderr in text mode. A bad override must name the selected source and its correction. If a bundled resource is missing, incomplete or invalid, report the logical resource and advise reinstalling the artifact or selecting a valid local corpus. Check that failure returns no partial catalog and leaves the working directory, home and runtime data untouched. Help and usage errors precede any source lookup. A corrected invocation resolves the source afresh.
 
+A malformed named source can change which policies an operator sees. With two or four trailing backslashes before a quote and a subsequent assignment using that quote, the pinned wheel warned about the invalid statement on stderr and served the bundled policies. Java refuses a malformed source selector when the catalog depends on that declaration. Its diagnostic names the setting and omits the value. A corrected declaration or a higher-priority selection restores inspection. Ordinary quoted Windows paths and valid trailing backslashes retain the reference interpretation.
+
 ## Commit Plan
 
 1. Add the source files, notices, classpath reader and default validation with independent byte and digest checks.

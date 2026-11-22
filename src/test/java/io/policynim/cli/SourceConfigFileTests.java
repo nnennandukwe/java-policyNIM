@@ -1,5 +1,6 @@
 package io.policynim.cli;
 
+import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -10,6 +11,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SourceConfigFileTests {
 
@@ -61,8 +63,41 @@ class SourceConfigFileTests {
     }
 
     @Test
-    void malformedStatementsDontHideLaterValidBindings() throws IOException {
-        var settings = read("NOT A VALID KEY=value\nPOLICYNIM_PROFILE=\"ignored\" trailing\n"
+    void trailingBackslashesKeepThePinnedQuotedPathWhenTheBindingIsValid() throws IOException {
+        for (String quote : new String[] {"'", "\""}) {
+            for (int count : new int[] {2, 4}) {
+                String path = "folder" + "\\".repeat(count);
+                String binding = "POLICYNIM_CORPUS_DIR=" + quote + path + quote + "\n";
+                assertEquals("folder" + "\\".repeat(count / 2), read(binding).corpus());
+                String otherQuote = quote.equals("'") ? "\"" : "'";
+                assertEquals("folder" + "\\".repeat(count / 2),
+                    read(binding + "NOTE=" + otherQuote + "ordinary" + otherQuote + "\n").corpus());
+            }
+        }
+        assertEquals("C:\\policies\\team", read("POLICYNIM_CORPUS_DIR='C:\\policies\\team'\n").corpus());
+    }
+
+    @Test
+    void malformedSourceSelectorsFailUntilCorrectedOrOverridden() throws IOException {
+        for (String key : new String[] {"policynim_corpus_dir", "POLICYNIM_PROFILE"}) {
+            String setting = key.equals("policynim_corpus_dir") ? "POLICYNIM_CORPUS_DIR" : "POLICYNIM_PROFILE";
+            for (int count : new int[] {2, 4}) {
+                String malformed = key + "=\"private-folder" + "\\".repeat(count) + "\"\nNOTE=\"private-value\"\n";
+                var failure = assertThrows(InvalidPolicyDocumentException.class, () -> read(malformed));
+                assertEquals("Invalid " + setting + " assignment in POLICYNIM_CONFIG_FILE. "
+                    + "Check its quoting or pass --corpus-root=<path>.", failure.getMessage());
+                assertEquals(new SourceConfigFile(null, null), read(malformed, Map.of(setting, "explicit")));
+                String repaired = malformed + setting + "=selected\n";
+                var expected = setting.endsWith("_DIR") ? new SourceConfigFile("selected", null)
+                    : new SourceConfigFile(null, "selected");
+                assertEquals(expected, read(repaired));
+            }
+        }
+    }
+
+    @Test
+    void unrelatedMalformedStatementsDontHideLaterValidBindings() throws IOException {
+        var settings = read("NOT A VALID KEY=value\nNOTE=\"ignored\" trailing\n"
             + "POLICYNIM_CORPUS_DIR=selected");
         assertNull(settings.profile());
         assertEquals("selected", settings.corpus());
