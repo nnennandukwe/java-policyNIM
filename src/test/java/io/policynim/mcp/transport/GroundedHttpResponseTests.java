@@ -90,6 +90,26 @@ class GroundedHttpResponseTests {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "\"id\":1,\"result\":{},\"result\":{}",
+        "\"id\":1,\"id\":1,\"result\":{}",
+        "\"id\":1,\"method\":\"ping\",\"method\":\"ping\"",
+        "\"id\":1,\"error\":{\"code\":0,\"code\":0,\"message\":\"message\"}",
+        "\"id\":1,\"method\":\"ping\",\"params\":{\"_meta\":{},\"_meta\":{}}",
+        "\"id\":1,\"method\":\"ping\",\"params\":{\"_meta\":{\"label\":1,\"label\":1}}",
+        "\"id\":1,\"method\":\"tools/list\",\"params\":{\"arguments\":{\"label\":1,\"label\":1}}",
+        "\"id\":1,\"result\":{\"rows\":[{\"label\":1,\"label\":1}]}"
+    })
+    void rejectsDuplicateNamesWithinOneObjectAndAcceptsNamesReusedAcrossObjects(String fields) {
+        assertAll(
+            () -> assertRejection(post(fields, "2025-11-25"), -32700),
+            () -> assertRejection(post(fields, "2026-07-28"), -32700),
+            () -> assertThat(post("\"id\":2,\"result\":{\"id\":2,\"rows\":[{\"key\":1},{\"key\":2}]}",
+                "2025-11-25").getStatus()).isEqualTo(202)
+        );
+    }
+
     private void assertRejection(MockHttpServletResponse response, int code) throws Exception {
         assertThat(response.getStatus()).isEqualTo(400);
         var frame = JSON.readTree(response.getContentAsByteArray());

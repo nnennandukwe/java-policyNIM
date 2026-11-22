@@ -249,6 +249,37 @@ async def raw_round_trip(product, endpoint, token):
             outcome["recoveryStatus"] = await initialize_legacy() if version == LEGACY else await recovered()
             observed["postedResponses"][label] = outcome
 
+        # Send raw JSON so the client preserves both copies of each member.
+        modern_params = json.dumps({"_meta": {VERSION_META: MODERN, CAPABILITIES_META: {}}})
+        duplicate_members = [
+            ("legacy repeated result", LEGACY, '{"jsonrpc":"2.0","id":"reply","result":{},"result":{}}',
+             {}, 202, initialize_legacy),
+            ("modern repeated id", MODERN, '{"jsonrpc":"2.0","id":"list","id":"list","method":"tools/list",'
+             '"params":' + modern_params + '}', {"Mcp-Method": "tools/list"}, 200, recovered),
+        ]
+        observed["duplicateMembers"] = {}
+        for label, version, body, method_header, python_status, retry in duplicate_members:
+            headers = {"Authorization": f"Bearer {token}", "MCP-Protocol-Version": version,
+                       "Content-Type": "application/json", "Accept": "application/json", **method_header}
+            response = await http.post(endpoint, headers=headers, content=body)
+            status = 400 if product == "java" else python_status
+            require(response.status_code == status, f"{label}: expected HTTP {status}, got {response.status_code}")
+            code = None
+            if status == 400:
+                frame = response.json()
+                code = frame["error"]["code"]
+                require(frame["jsonrpc"] == "2.0" and frame["id"] is None and code == -32700,
+                        f"{label}: expected a parse error with a null ID")
+            elif status == 200:
+                frame = response.json()
+                require(frame["jsonrpc"] == "2.0" and frame["id"] == "list" and frame["result"]["resultType"] == "complete"
+                        and sorted(tool["name"] for tool in frame["result"]["tools"]) == sorted(PYTHON_TOOLS),
+                        f"{label}: expected a correlated tool list")
+            else:
+                require(response.content == b"", f"{label}: expected an empty acknowledgment")
+            observed["duplicateMembers"][label] = {"status": response.status_code, "code": code,
+                                                   "recoveryStatus": await retry()}
+
         trusted = {"Host": "parity.invalid", "Origin": "https://parity.invalid"}
         await recovered(headers=trusted)
         observed["publicOrigin"] = 200

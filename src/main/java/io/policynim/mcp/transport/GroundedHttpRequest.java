@@ -99,6 +99,7 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         boolean validParams = true;
         JsonNode metadata = null;
         try (var parser = json.createParser(body)) {
+            parser.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
             JsonToken root = parser.nextToken();
             if (root == null) {
                 throw new IOException("Expected a JSON value");
