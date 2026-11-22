@@ -41,10 +41,13 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Build executable jar for JDBC clients
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
       - name: Run JDBC integration tests offline from live providers
         run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress test-compile -Dit.test=io.policynim.persistence.jdbc.*IT failsafe:integration-test failsafe:verify
+      - name: Verify installed JDBC search
+        run: |
+          export POLICYNIM_PROVIDER_NVIDIA_ENABLED=false
+          ./mvnw -B --no-transfer-progress -DskipTests package
+          ./mvnw -B --no-transfer-progress -Dit.test=PackagedJdbcSearchIT failsafe:integration-test failsafe:verify
 
   acceptance:
     name: acceptance tests

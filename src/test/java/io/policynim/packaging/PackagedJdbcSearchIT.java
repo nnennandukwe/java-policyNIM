@@ -1,4 +1,4 @@
-package io.policynim.persistence.jdbc;
+package io.policynim.packaging;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,6 +70,8 @@ class PackagedJdbcSearchIT {
                 String session = initialize.headers().firstValue("Mcp-Session-Id").orElseThrow();
                 assertEquals(202, post(http, endpoint, INITIALIZED, token, session).statusCode());
                 assertStoredPolicy(result(post(http, endpoint, SEARCH, token, session), 2));
+                server.destroy();
+                assertTrue(server.waitFor(10, TimeUnit.SECONDS), "The JDBC server didn't stop after termination.");
             }
             finally {
                 PackagedMcpHttp.reap(server);
@@ -83,7 +85,8 @@ class PackagedJdbcSearchIT {
         assertEquals(search, new ObjectMapper().readTree(toolResult.path("content").path(0).path("text").asText()));
         assertEquals("checkpoint", search.path("query").textValue());
         assertEquals(5, search.path("topK").intValue());
-        assertTrue(search.path("insufficientContext").isBoolean() && !search.get("insufficientContext").booleanValue());
+        assertTrue(search.path("insufficientContext").isBoolean());
+        assertFalse(search.get("insufficientContext").booleanValue());
         assertEquals(1, search.path("hits").size());
         JsonNode hit = search.get("hits").get(0);
         assertEquals("OPS-RECOVERY-001:recovery", hit.path("chunkId").textValue());
