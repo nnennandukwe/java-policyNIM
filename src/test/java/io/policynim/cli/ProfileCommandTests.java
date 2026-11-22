@@ -94,16 +94,18 @@ class ProfileCommandTests {
         String digest = "sha256:" + "0".repeat(64);
         Files.writeString(profile, """
             "handoff\\nreview\\towner" = "%s"
+            'handoff\\u000areview\\u0009owner' = "%s"
             [[exclusions]]
             target_id = "handoff\\nreview\\towner"
             expected_digest = "%s"
             reason = "Review the handoff."
-            """.formatted(digest, digest), StandardOpenOption.APPEND);
+            """.formatted(digest, digest, digest), StandardOpenOption.APPEND);
 
         out.reset();
         assertThat(run("profile", "diff", "--format=json", profile.toString())).isZero();
         var report = json.readTree(out.toByteArray());
         assertThat(report.at("/removed/0").textValue()).isEqualTo("handoff\nreview\towner");
+        assertThat(report.at("/removed/1").textValue()).isEqualTo("handoff\\u000areview\\u0009owner");
         assertThat(report.at("/invalidated_decisions/0").textValue()).isEqualTo("handoff\nreview\towner");
         assertThat(report.required("validation_error").textValue())
             .isEqualTo("Unknown target 'handoff\\nreview\\towner'; review IDs.");
@@ -111,7 +113,7 @@ class ProfileCommandTests {
         out.reset();
         assertThat(run("profile", "diff", profile.toString())).isZero();
         assertThat(out.toString(UTF_8).lines()).hasSize(8).contains(
-            "removed: handoff\\u000areview\\u0009owner",
+            "removed: handoff\\u000areview\\u0009owner, handoff\\\\u000areview\\\\u0009owner",
             "invalidated_decisions: handoff\\u000areview\\u0009owner",
             "Update blocked: Unknown target 'handoff\\nreview\\towner'; review IDs.");
         assertThat(err.size()).isZero();
