@@ -130,10 +130,12 @@ class SessionHttpServletTests {
             var repeat = initializeRequest();
             repeat.addHeader(HttpHeaders.MCP_SESSION_ID, original);
             repeat.setCharacterEncoding(StandardCharsets.UTF_16LE.name());
+            // # non-English test data
+            String clientName = "ポリシー";
             repeat.setContent("""
-                {"jsonrpc":"2.0","params":{"_meta":{"method":"tools/list","id":null},"clientInfo":{"name":"ポリシー",
+                {"jsonrpc":"2.0","params":{"_meta":{"method":"tools/list","id":null},"clientInfo":{"name":"%s",
                 "version":"1"},"capabilities":{},"protocolVersion":"2025-06-18"},"method":"initialize","id":"second"}
-                """.getBytes(StandardCharsets.UTF_16LE));
+                """.formatted(clientName).getBytes(StandardCharsets.UTF_16LE));
             var second = new MockHttpServletResponse();
             transport.service(repeat, second);
             String replacement = second.getHeader(HttpHeaders.MCP_SESSION_ID);
