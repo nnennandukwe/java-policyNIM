@@ -61,7 +61,7 @@ POLICYNIM_MCP_TRANSPORT=stdio java -jar /absolute/path/to/policynim.jar
 
 The client sends JSON-RPC on stdin and reads replies on stdout. By default the jar writes diagnostics to stderr, opens without a web listener and exits when the client closes stdin. If you configure file logging, read diagnostics at the configured location. Keep an explicit logging configuration or banner override from writing to stdout. The same JDBC and provider settings apply when a client needs policy retrieval.
 
-Spring's explicit `spring.ai.mcp.server.stdio` setting takes precedence over `policynim.mcp.transport`. The effective HTTP endpoint and bearer configuration also apply when an explicit Spring setting selects HTTP.
+Set `spring.ai.mcp.server.stdio=true` to select stdio or `false` to select HTTP. That explicit setting takes precedence over `policynim.mcp.transport`. Use the literal `false` for HTTP because Spring AI checks that text when registering its HTTP transport. The effective HTTP endpoint and bearer configuration also apply when an explicit Spring setting selects HTTP.
 
 ## Hosted Runtime Configuration
 

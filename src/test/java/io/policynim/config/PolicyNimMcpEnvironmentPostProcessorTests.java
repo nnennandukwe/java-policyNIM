@@ -13,6 +13,7 @@ import org.springframework.core.env.StandardEnvironment;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PolicyNimMcpEnvironmentPostProcessorTests {
 
@@ -91,6 +92,53 @@ class PolicyNimMcpEnvironmentPostProcessorTests {
         assertThat(environment.getProperty("spring.main.banner-mode")).isEqualTo("log");
         assertThat(environment.getProperty("logging.config")).isEqualTo("file:operator-logging.xml");
         assertThat(environment.getProperty("logging.threshold.console")).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"off", "OFF", "0", "no", " false ", "", "sometimes"})
+    void rejectsSpringSettingsThatCantReliablySelectTheIntendedTransport(String setting) {
+        MockEnvironment environment = new MockEnvironment().withProperty("spring.ai.mcp.server.stdio", setting);
+
+        assertThatThrownBy(() -> postProcess(environment))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("spring.ai.mcp.server.stdio")
+            .hasMessageContaining("true for stdio or false for HTTP");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "TRUE", "on", "1", "yes"})
+    void acceptsTrueSpringAliasesThatActivateTheStdioTransport(String setting) {
+        MockEnvironment environment = new MockEnvironment().withProperty("spring.ai.mcp.server.stdio", setting);
+
+        postProcess(environment);
+
+        assertThat(McpTransport.resolve(environment)).isEqualTo(McpTransport.STDIO);
+        assertThat(environment.getProperty("spring.main.web-application-type")).isEqualTo("none");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"false", "FALSE"})
+    void acceptsLiteralSpringFalseForHttp(String setting) {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("policynim.mcp.transport", "stdio")
+            .withProperty("spring.ai.mcp.server.stdio", setting);
+
+        postProcess(environment);
+
+        assertThat(McpTransport.resolve(environment)).isEqualTo(McpTransport.STREAMABLE_HTTP);
+        assertThat(environment.getProperty("spring.ai.mcp.server.protocol")).isEqualTo("STREAMABLE");
+    }
+
+    @Test
+    void retainsTheRequestedStructuredConsoleFormatInStdioMode() {
+        MockEnvironment environment = new MockEnvironment()
+            .withProperty("policynim.mcp.transport", "stdio")
+            .withProperty("logging.structured.format.console", "ecs");
+
+        postProcess(environment);
+
+        assertThat(environment.getProperty("logging.config")).isEqualTo("classpath:logback-stdio-structured.xml");
+        assertThat(environment.getProperty("logging.structured.format.console")).isEqualTo("ecs");
     }
 
     private static void postProcess(ConfigurableEnvironment environment) {

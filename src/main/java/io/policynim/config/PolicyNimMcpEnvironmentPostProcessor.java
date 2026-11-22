@@ -7,6 +7,7 @@ import org.springframework.boot.logging.LogFile;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -58,7 +59,11 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
             return;
         }
         if (LogFile.get(environment) == null) {
-            derived.put("logging.config", "classpath:logback-stdio.xml");
+            boolean structured = StringUtils.hasText(environment.getProperty("logging.structured.format.console"));
+            derived.put(
+                "logging.config",
+                structured ? "classpath:logback-stdio-structured.xml" : "classpath:logback-stdio.xml"
+            );
         }
         else {
             // Boot owns the rolling file appender. Its default console appender writes to stdout.
