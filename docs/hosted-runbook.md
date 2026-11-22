@@ -21,7 +21,7 @@ Run the same package smoke used by CI:
 POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
 jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
 POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress \
-  -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT failsafe:integration-test failsafe:verify
+  -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT,GroundedHttpIT,GroundedStdioIT failsafe:integration-test failsafe:verify
 ```
 
 ## Container Build
@@ -63,6 +63,14 @@ The client sends JSON-RPC on stdin and reads replies on stdout. By default the j
 
 Set `spring.ai.mcp.server.stdio=true` to select stdio or `false` to select HTTP. That explicit setting takes precedence over `policynim.mcp.transport`. The supported HTTP spelling is `false`, ignoring case. The effective HTTP endpoint and bearer configuration also apply when an explicit Spring setting selects HTTP.
 
+To use the grounded contract, set both environment values in the local client's server configuration.
+
+```bash
+POLICYNIM_MCP_TRANSPORT=stdio POLICYNIM_MCP_CONTRACT=grounded-v1 java -jar /absolute/path/to/policynim.jar
+```
+
+A legacy client starts with `initialize`. A modern client sends per-request protocol metadata and can start with `server/discover` or call a tool directly. Each stdio connection keeps the protocol selected by its first request. Use a fresh process to switch protocols. Send one UTF-8 JSON message per line, up to 4 MiB before the line ending. Keep stdout available for replies while closing stdin so a pending request can finish. [Protocol versions and compatibility](build-plans/mcp-negotiation.md)
+
 ## Connect an existing HTTP client
 
 The default Streamable HTTP endpoint is `/mcp`. For a JSON-RPC POST, send `Content-Type: application/json` and `Accept: application/json, text/event-stream`. Initialize a session and send its `Mcp-Session-Id` header on subsequent requests. If bearer authentication is enabled, each request also needs its bearer token. A missing session ID returns 400. An unknown, deleted, or expired session ID returns 404. Initialize a fresh session to recover. Use `GET /livez` for liveness probes. An authorized HEAD request to the session endpoint returns 405 and leaves the client's event stream open.
@@ -79,7 +87,7 @@ Set `POLICYNIM_MCP_CONTRACT=grounded-v1` and launch the jar with Streamable HTTP
 
 A legacy client can keep a GET open for server-sent events. The grounded server accepts up to 1,024 of these listeners at once. A full listener pool returns 429 with a `Retry-After` header. The server sends a heartbeat every 15 seconds. Two consecutive missed writes release a stalled listener's slot, even when the stream never starts. A successful write resets the count. A disconnected client can open a fresh GET. Modern requests use POST.
 
-Leave the contract at its default `java-v1` for existing session-based clients, SSE, or stdio. Setting `spring.ai.mcp.server.stdio` explicitly still takes precedence over `policynim.mcp.transport`.
+Leave the contract at its default `java-v1` for existing session-based clients, SSE, or the earlier Java stdio client. Setting `spring.ai.mcp.server.stdio` explicitly still takes precedence over `policynim.mcp.transport`.
 
 Bearer-authenticated grounded endpoints require an explicit public origin. Set `POLICYNIM_MCP_PUBLIC_BASE_URL` to the public origin, for example `https://policies.example`. If you run a proxy, forward the original Host. The grounded endpoint accepts loopback clients and the configured public authority. On anonymous servers it also accepts the specific interface and port selected for binding. Wildcard binds grant no additional host access. An untrusted Host returns 421 and an untrusted Origin returns 403 before authentication.
 

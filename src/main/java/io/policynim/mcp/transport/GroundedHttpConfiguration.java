@@ -1,8 +1,6 @@
 package io.policynim.mcp.transport;
 
-import io.modelcontextprotocol.modern.server.McpServer;
 import io.modelcontextprotocol.modern.server.feature.McpSyncToolRepository;
-import io.modelcontextprotocol.modern.server.feature.ToolsFeature;
 import io.modelcontextprotocol.modern.server.transport.HttpServletMcpTransport;
 import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.server.McpStatelessServerHandler;
@@ -20,7 +18,6 @@ import org.springframework.context.event.ContextClosedEvent;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Objects;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnGroundedHttp
@@ -29,36 +26,26 @@ class GroundedHttpConfiguration {
     static final List<String> HANDSHAKE_VERSIONS = List.of(ProtocolVersions.MCP_2024_11_05,
         ProtocolVersions.MCP_2025_03_26, ProtocolVersions.MCP_2025_06_18, ProtocolVersions.MCP_2025_11_25);
 
-    // Public server instructions at the pinned Python baseline.
-    private static final String DEFAULT_INSTRUCTIONS = "Search policy sources or request citation-backed guidance before coding. "
-        + "Treat insufficient_context as missing evidence; guidance does not execute changes.";
-
     @Bean(destroyMethod = "destroy")
     GroundedHttpServlet groundedHttpServlet(StreamableHttpTransportMarker endpoint, McpServerSettings settings,
         GroundedHttpAuthorities authorities,
         @Qualifier("groundedLegacyTools") List<McpStatelessServerFeatures.SyncToolSpecification> legacyTools,
         @Qualifier("groundedModernTools") McpSyncToolRepository modernTools) {
-        var mapper = GroundedHttpJson.mapper();
+        var mapper = GroundedMcpJson.mapper();
         var legacy = HttpServletStatelessServerTransport.builder().messageEndpoint(endpoint.path())
             .httpHeaderValidator(authorities).jsonMapper(mapper).maxRequestSize(GroundedHttpServlet.MAX_BODY).build();
-        var identity = settings.serverInfo();
-        String instructions = Objects.requireNonNullElse(settings.instructions(), DEFAULT_INSTRUCTIONS);
-        var modern = McpServer.builder()
-            .serverInfo(io.modelcontextprotocol.modern.McpSchema.Implementation.builder(identity.name(), identity.version()).build())
-            .instructions(instructions).jsonMapper(mapper);
         try {
             var legacyServer = io.modelcontextprotocol.server.McpServer.sync(new LegacyTransport(legacy));
             var capabilities = McpSchema.ServerCapabilities.builder();
             if (settings.enabled("capabilities.tool")) {
                 capabilities.tools(false);
                 legacyServer.tools(legacyTools);
-                modern.feature(ToolsFeature.ofSync(modernTools));
             }
             // The stateless SDK returns a tool result with isError for schema-invalid arguments to a known tool.
-            legacyServer.validateToolInputs(true).serverInfo(identity).instructions(instructions)
+            legacyServer.validateToolInputs(true).serverInfo(settings.serverInfo()).instructions(settings.groundedInstructions())
                 .requestTimeout(settings.requestTimeout())
                 .capabilities(capabilities.build()).immediateExecution(true).build();
-            var modernServer = modern.build();
+            var modernServer = settings.groundedModernServer(mapper, modernTools);
             try {
                 var transport = HttpServletMcpTransport.builder(modernServer).httpHeaderValidator(authorities)
                     .jsonMapper(mapper).endpoint(endpoint.path())

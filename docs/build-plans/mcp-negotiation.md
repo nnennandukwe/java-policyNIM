@@ -63,6 +63,8 @@ The stateless Java servlet requires both JSON and SSE in Accept, while the pinne
 
 **Stdio within grounded-v1.** Open stdin once. Select the protocol from the first JSON-RPC **request**. `initialize` chooses legacy. Any other request with the reserved `params._meta["io.modelcontextprotocol/protocolVersion"]` key chooses modern. A progress token alone doesn't select modern. Bound frame size, retain at most eight preceding non-request frames as Python does, replay only that retained prefix and the opening request, and preserve unread buffered bytes. Construct only the selected SDK transport. The Java legacy provider starts consuming its input when the server attaches its session factory. Use the shared output writer to keep error and result frames intact under concurrent calls.
 
+On the verified HTTP merge, starting the jar with `grounded-v1` and stdio exited 1 before reading an MCP request. The pinned Python command negotiated both eras. Its reader keeps the first eight pre-request frames and reads complete lines without a declared byte cap. The pinned Java SDK's stdio default is 16 Mi characters per line. The grounded Java adapter caps each UTF-8 frame at 4 MiB, excluding LF or CRLF. After an oversized line, resume at the next delimiter. A client can retry on the same input stream. [Java stdio reader](https://github.com/modelcontextprotocol/java-sdk/blob/81aed210cea9b4d080d0300944b6ee128cf64424/mcp-core/src/main/java/io/modelcontextprotocol/modern/McpStdio.java) · [Python stdio reader](https://github.com/modelcontextprotocol/python-sdk/blob/9972c21aa42054fb1450c5fc614761ed11847ec6/src/mcp/server/stdio.py) · [Python pre-request buffer](https://github.com/modelcontextprotocol/python-sdk/blob/9972c21aa42054fb1450c5fc614761ed11847ec6/src/mcp/server/runner.py#L649-L703)
+
 Keep the selected protocol for the life of stdin. A subsequent modern envelope on a legacy connection yields `-32600`. A subsequent initialize on a modern connection yields `-32022` with supported/requested data where available. Java's modern SDK handles a plain legacy initialize but treats a modern-stamped initialize differently. A boundary guard should cover the missing case and leave normal protocol decoding and tool dispatch to the SDK. [Pinned Python SDK](https://pypi.org/project/mcp/2.2.0/) · [Python process checks](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/tests/test_mcp_protocol.py)
 
 Python MCP 2.2.0 checks the media range in `Accept` and discards its parameters. When JSON matches, both protocol modes return the JSON response even with `application/json;q=0` or `application/json;q=0, */*;q=1`. Preserve this observable choice in grounded HTTP. The HTTP specification permits a server to disregard an unsatisfied content negotiation field. [HTTP semantics, section 12.4.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.4.1)
@@ -117,6 +119,12 @@ uv sync --frozen --offline --project "$reference_dir"
 The check creates a temporary home for each server, verifies its negotiated revision and installed version, calls search without a required query, and lists tools again on the same session. Java and Python each have their own expected tool names for this migration. The result includes the jar checksum. [Package checks](../hosted-runbook.md)
 
 The JDBC test uses the same Markdown file a Python operator can select with `POLICYNIM_CORPUS_DIR`. The pinned Python CLI accepted it with `policynim policies validate --source --format json` and reported one effective policy. Its source catalog digest was `sha256:8235dea85dcda12002099e86802cb31ece64c5597ae9f1ca2dc736be3d46b749`. The Java check runs jar ingest in one process and verifies the returned policy ID, path, body, and lines in another. [Shared recovery policy](../../src/test/resources/parity/policies/recovery.md)
+
+For grounded stdio, run the paired check with the same locked Python installation. It launches both servers as child processes in separate temporary directories and records each jar digest and client result.
+
+```bash
+"$reference_dir/.venv/bin/python" src/test/parity/grounded_stdio.py --jar target/policynim.jar
+```
 
 ### Reproduce the paired HTTP check
 

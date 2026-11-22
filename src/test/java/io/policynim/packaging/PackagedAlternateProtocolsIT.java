@@ -162,7 +162,6 @@ class PackagedAlternateProtocolsIT {
         "unknown,--server.port=0",
         "grounded-v1,--spring.ai.mcp.server.protocol=SSE",
         "grounded-v1,--spring.ai.mcp.server.protocol=STATELESS",
-        "grounded-v1,--spring.ai.mcp.server.stdio=true",
         "grounded-v1,--spring.main.web-application-type=none"
     })
     void unavailableContractFailsBeforeServing(String contract, String option, @TempDir Path directory) throws Exception {
