@@ -10,6 +10,8 @@ The current server exposes:
 - `/livez` as a public liveness endpoint
 - `/healthz` as a public readiness endpoint with diagnostic storage details
 
+HTTP clients can use the default Java session handshake or opt into sessionless legacy and modern MCP with `POLICYNIM_MCP_CONTRACT=grounded-v1`. Both profiles expose search and preflight. [HTTP client setup](docs/hosted-runbook.md#connect-a-grounded-http-client)
+
 Project docs:
 
 - [Contributor workflow](docs/contributor-workflow.md)
@@ -38,7 +40,7 @@ export SPRING_DATASOURCE_PASSWORD=policynim
 java -jar <path-to-policynim.jar> ingest --corpus-root=/absolute/path/to/policies
 ```
 
-The ingest command exits after loading the corpus and does not start the hosted MCP web server.
+The ingest command exits after loading the corpus and doesn't start the hosted MCP web server.
 Keep datasource passwords in environment variables or a secret manager rather than inline command arguments.
 
 ## Packaging
@@ -59,4 +61,4 @@ The Dockerfile uses pinned Eclipse Temurin base image digests, runs the service 
 
 ## Hosted MCP Auth
 
-Bearer auth for the hosted MCP endpoint is opt-in while local bootstrap work is still in progress. Set `policynim.mcp.auth.enabled=true` and provide `POLICYNIM_MCP_BEARER_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`; `/livez` and `/healthz` stay public for probes.
+Bearer auth for the hosted MCP endpoint is opt-in while local bootstrap work is still in progress. Set `policynim.mcp.auth.enabled=true` and provide `POLICYNIM_MCP_BEARER_TOKEN` to require `Authorization: Bearer <token>` on `/mcp`. Grounded HTTP also requires the public service origin in `POLICYNIM_MCP_PUBLIC_BASE_URL`. The `/livez` and `/healthz` probes stay public.

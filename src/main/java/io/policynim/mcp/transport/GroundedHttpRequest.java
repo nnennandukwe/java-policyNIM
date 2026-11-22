@@ -57,9 +57,9 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         };
     }
 
-    record Envelope(String version, JsonNode id, String method, boolean response, JsonNode metadata) {
+    record Envelope(String version, JsonNode id, String method, boolean validParams, boolean response, JsonNode metadata) {
         boolean validRequest() {
-            return "2.0".equals(version) && method != null
+            return "2.0".equals(version) && method != null && validParams
                 && (id == null || id.isTextual() || id.isIntegralNumber());
         }
     }
@@ -70,9 +70,14 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         JsonNode id = null;
         String method = null;
         boolean response = false;
+        boolean validParams = true;
         JsonNode metadata = null;
         try (var parser = json.createParser(body)) {
-            if (parser.nextToken() == JsonToken.START_OBJECT) {
+            JsonToken root = parser.nextToken();
+            if (root == null) {
+                throw new IOException("Expected a JSON value");
+            }
+            if (root == JsonToken.START_OBJECT) {
                 while (parser.nextToken() == JsonToken.FIELD_NAME) {
                     String field = parser.currentName();
                     JsonToken value = parser.nextToken();
@@ -80,8 +85,11 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                         case "id" -> id = value.isScalarValue() ? json.readTree(parser) : json.nullNode();
                         case "jsonrpc" -> version = value == JsonToken.VALUE_STRING ? parser.getText() : null;
                         case "method" -> method = value == JsonToken.VALUE_STRING ? parser.getText() : null;
-                        case "result", "error" -> response = true;
-                        case "params" -> metadata = metadata(parser, value, json);
+                        case "result", "error" -> response |= value == JsonToken.START_OBJECT;
+                        case "params" -> {
+                            validParams = value == JsonToken.START_OBJECT || value == JsonToken.VALUE_NULL;
+                            metadata = metadata(parser, value, json);
+                        }
                         default -> { }
                     }
                     parser.skipChildren();
@@ -94,7 +102,7 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                 throw new IOException("Expected a single JSON value");
             }
         }
-        return new Envelope(version, id, method, response, metadata);
+        return new Envelope(version, id, method, validParams, response, metadata);
     }
 
     private static JsonNode metadata(JsonParser parser, JsonToken value, ObjectMapper json) throws IOException {

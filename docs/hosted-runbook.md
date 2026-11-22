@@ -77,6 +77,8 @@ By default, server discovery reports the version in the jar manifest. The existi
 
 Set `POLICYNIM_MCP_CONTRACT=grounded-v1` and launch the jar with Streamable HTTP. Connect to the same configured MCP path. The default is `/mcp`. Each request can run without a session ID. A current MCP client can discover the server with protocol `2026-07-28`. A legacy client can initialize with `2025-11-25`. Both can use the existing Java `policy_search` and `policy_preflight` arguments and results. [Tool contracts and remaining work](parity-grounding.md)
 
+A legacy client can keep a GET open for server-sent events. The grounded server accepts up to 1,024 of these listeners at once. A full listener pool returns 429 with a `Retry-After` header. Closing a listener frees its slot once the server observes the disconnect. Modern requests use POST.
+
 Leave the contract at its default `java-v1` for existing session-based clients, SSE, or stdio. Setting `spring.ai.mcp.server.stdio` explicitly still takes precedence over `policynim.mcp.transport`.
 
 Bearer-authenticated grounded endpoints require an explicit public origin. Set `POLICYNIM_MCP_PUBLIC_BASE_URL` to the public origin, for example `https://policies.example`. If you run a proxy, forward the original Host. The grounded endpoint accepts loopback clients and the configured public authority. On anonymous servers it also accepts the specific interface and port selected for binding. Wildcard binds grant no additional host access. An untrusted Host returns 421 and an untrusted Origin returns 403 before authentication.

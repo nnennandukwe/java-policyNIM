@@ -48,6 +48,7 @@ async def server(command, environment, directory, started):
                 raise RuntimeError(f"{Path(command[0]).name} exited before it opened a listener.")
 
         async def discard_output():
+            """Drain server logs so a full pipe can't stall the process."""
             while await process.stdout.read(8192):
                 pass
 
@@ -74,6 +75,7 @@ async def server(command, environment, directory, started):
 
 
 def home(directory):
+    """Create a private home and an empty configuration file for one server."""
     directory.mkdir()
     config = directory / "empty.env"
     config.touch()
@@ -83,16 +85,19 @@ def home(directory):
 
 
 async def sdk_round_trip(label, mode, endpoint, token, tools, version):
+    """Check negotiation, tool refusals, and discovery with one SDK client."""
     methods = []
     replies = []
     issued_session = False
     identity = None
 
     async def request_sent(request):
+        """Record the methods the client sends to the server."""
         if request.method == "POST":
             methods.append(json.loads(request.content)["method"])
 
     async def response_received(response):
+        """Capture JSON replies and check whether the server issued a session ID."""
         nonlocal issued_session
         issued_session |= "mcp-session-id" in response.headers
         if response.headers.get("content-type", "").startswith("application/json") and await response.aread():
@@ -133,6 +138,7 @@ async def raw_round_trip(endpoint, token):
     async with httpx2.AsyncClient(timeout=5, trust_env=False) as http:
         async def call(method="tools/list", *, version=MODERN, meta=None, headers=None, params=None,
                        accept="application/json", authorized=True, path=endpoint):
+            """Send a modern request with the specified envelope and HTTP headers."""
             values = {VERSION_META: version, CAPABILITIES_META: {}} if meta is None else meta
             body = {"jsonrpc": "2.0", "id": "parity-42", "method": method,
                     "params": {"_meta": values, **(params or {})}}
@@ -142,6 +148,7 @@ async def raw_round_trip(endpoint, token):
             return await http.post(path, headers=wire_headers | (headers or {}), json=body)
 
         async def recovered(accept="application/json", headers=None):
+            """Verify that a sessionless tools/list request returns a complete JSON result."""
             response = await call(accept=accept, headers=headers)
             require(response.status_code == 200, f"tools/list: HTTP {response.status_code}")
             require(response.headers.get("content-type", "").startswith("application/json"),
@@ -151,11 +158,17 @@ async def raw_round_trip(endpoint, token):
                     and frame["result"]["resultType"] == "complete",
                     "tools/list: missing correlated modern result")
             require("mcp-session-id" not in response.headers, "tools/list: session ID issued")
+            return response.status_code
 
         initialize = {"jsonrpc": "2.0", "id": "legacy-1", "method": "initialize", "params": {
             "protocolVersion": LEGACY, "capabilities": {}, "clientInfo": {"name": "parity", "version": "1"},
         }}
-        for accept in ("application/json", "*/*", "application/*", "application/json, text/event-stream"):
+        observed["accept"] = {}
+        for accept in (
+            "application/json", "*/*", "application/*", "application/json, text/event-stream",
+            "application/json;q=0", "application/json;q=0, */*;q=1", "*/*;q=1, application/*;q=0",
+            "application/*;q=0", "ApPlIcAtIoN/JsOn; profile=public",
+        ):
             legacy = await http.post(endpoint, headers={"Authorization": f"Bearer {token}", "Accept": accept},
                                      json=initialize)
             require(legacy.status_code == 200 and "mcp-session-id" not in legacy.headers,
@@ -163,7 +176,7 @@ async def raw_round_trip(endpoint, token):
             frame = legacy.json()
             require(frame["id"] == "legacy-1" and frame["result"]["protocolVersion"] == LEGACY,
                     "legacy initialize: wrong ID or protocol")
-            await recovered(accept)
+            observed["accept"][accept] = {"legacy": legacy.status_code, "modern": await recovered(accept)}
         trusted = {"Host": "parity.invalid", "Origin": "https://parity.invalid"}
         await recovered(headers=trusted)
         observed["publicOrigin"] = 200
@@ -200,6 +213,7 @@ async def raw_round_trip(endpoint, token):
 
 
 async def exercise(label, endpoint, token, tools, version):
+    """Run all three SDK client modes and the direct HTTP checks on one server."""
     sessions = []
     for mode in ("legacy", "auto", MODERN):
         sessions.append(await sdk_round_trip(label, mode, endpoint, token, tools, version))
@@ -207,6 +221,7 @@ async def exercise(label, endpoint, token, tools, version):
 
 
 async def main():
+    """Start both installed servers and report their results with the tested jar's digest."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jar", required=True, type=Path)
     parser.add_argument("--reference-root", required=True, type=Path, help="Extracted pinned Python PolicyNIM tree")

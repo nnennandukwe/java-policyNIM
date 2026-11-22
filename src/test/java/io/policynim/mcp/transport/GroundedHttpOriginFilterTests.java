@@ -29,7 +29,9 @@ class GroundedHttpOriginFilterTests {
         "::ffff:255.255.255.255,8000,[::ffff:255.255.255.255]:8000,,421",
         "192.0.2.20,8000,192.0.2.20:8000,https://192.0.2.20:8000,403",
         "localhost,8080,localhost:8080,null,403",
-        "localhost,8080,localhost:8080,http://localhost:65536,403"
+        "localhost,8080,localhost:8080,http://localhost:65536,403",
+        "localhost,8080,[invalid-address]:8080,,421",
+        "localhost,8080,localhost:8080,http://[invalid-address]:8080,403"
     })
     void checksTheAnonymousBindAndLoopbackOrigins(String bindHost, int port, String host, String origin, int status)
         throws Exception {

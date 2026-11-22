@@ -20,13 +20,20 @@ import java.util.concurrent.TimeUnit;
 /** Legacy stateless clients can listen for SSE comments until the connection or the application closes. */
 final class GroundedHttpListeners implements AutoCloseable {
     private static final byte[] COMMENT = ": ping\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final int HEARTBEAT_SECONDS = 15;
+    private final int capacity;
     private final Set<Listener> active = new HashSet<>();
     private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(
         Thread.ofPlatform().daemon().name("policynim-mcp-sse-heartbeat").factory());
     private boolean closed;
 
     GroundedHttpListeners() {
-        timer.scheduleWithFixedDelay(this::heartbeat, 15, 15, TimeUnit.SECONDS);
+        this(1024);
+    }
+
+    GroundedHttpListeners(int capacity) {
+        this.capacity = capacity;
+        timer.scheduleWithFixedDelay(this::heartbeat, HEARTBEAT_SECONDS, HEARTBEAT_SECONDS, TimeUnit.SECONDS);
     }
 
     void open(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -35,8 +42,14 @@ final class GroundedHttpListeners implements AutoCloseable {
                 response.setStatus(503);
                 return;
             }
+            if (active.size() >= capacity) {
+                response.setStatus(429);
+                response.setIntHeader("Retry-After", HEARTBEAT_SECONDS);
+                return;
+            }
             var context = request.startAsync(request, response);
             var listener = new Listener(context);
+            active.add(listener);
             try {
                 context.setTimeout(0);
                 context.addListener(listener);
@@ -45,7 +58,6 @@ final class GroundedHttpListeners implements AutoCloseable {
                 response.setHeader("X-Accel-Buffering", "no");
                 listener.output = response.getOutputStream();
                 listener.output.setWriteListener(listener);
-                active.add(listener);
             }
             catch (IOException | RuntimeException failure) {
                 listener.finish();
@@ -106,13 +118,20 @@ final class GroundedHttpListeners implements AutoCloseable {
             }
         }
 
-        synchronized void finish() {
+        private synchronized boolean retire() {
             if (finished) {
-                return;
+                return false;
             }
             finished = true;
             synchronized (GroundedHttpListeners.this) {
                 active.remove(this);
+            }
+            return true;
+        }
+
+        void finish() {
+            if (!retire()) {
+                return;
             }
             try {
                 context.complete();
@@ -132,7 +151,7 @@ final class GroundedHttpListeners implements AutoCloseable {
         public void onTimeout(AsyncEvent event) { finish(); }
 
         @Override
-        public void onComplete(AsyncEvent event) { finish(); }
+        public void onComplete(AsyncEvent event) { retire(); }
 
         @Override
         public void onStartAsync(AsyncEvent event) { }

@@ -22,6 +22,7 @@ final class GroundedHttpAuthorities implements ServerHttpHeaderValidator {
     private final String bindHost;
     private final IntSupplier bindPort;
     private final URI publicOrigin;
+    private final String publicHost;
 
     GroundedHttpAuthorities(String bindHost, IntSupplier bindPort, boolean authenticated, URI publicOrigin) {
         if (authenticated && publicOrigin == null) {
@@ -32,8 +33,9 @@ final class GroundedHttpAuthorities implements ServerHttpHeaderValidator {
         this.bindHost = authenticated || NON_SPECIFIC.contains(host) ? null : host;
         this.bindPort = bindPort;
         this.publicOrigin = publicOrigin;
-        if (publicOrigin != null && (!validOrigin(publicOrigin, true)
-            || NON_SPECIFIC.contains(normalizeHost(publicOrigin.getHost())))) {
+        this.publicHost = publicOrigin != null && validOrigin(publicOrigin, true)
+            ? normalizeHost(publicOrigin.getHost()) : null;
+        if (publicOrigin != null && (publicHost == null || NON_SPECIFIC.contains(publicHost))) {
             throw new IllegalArgumentException("policynim.mcp.public-base-url must be an HTTP or HTTPS origin.");
         }
     }
@@ -54,16 +56,17 @@ final class GroundedHttpAuthorities implements ServerHttpHeaderValidator {
 
     private boolean allows(String value, boolean origin) {
         URI uri;
+        String host;
         try {
             uri = URI.create(origin ? value : "http://" + value);
+            if (!validOrigin(uri, false)) {
+                return false;
+            }
+            host = normalizeHost(uri.getHost());
         }
-        catch (IllegalArgumentException invalidUri) {
+        catch (IllegalArgumentException invalidAuthority) {
             return false;
         }
-        if (!validOrigin(uri, false)) {
-            return false;
-        }
-        String host = normalizeHost(uri.getHost());
         String scheme = uri.getScheme();
         int port = uri.getPort();
         if (!origin || "http".equalsIgnoreCase(scheme)) {
@@ -78,7 +81,7 @@ final class GroundedHttpAuthorities implements ServerHttpHeaderValidator {
             return false;
         }
         String publicScheme = publicOrigin.getScheme();
-        return host.equals(normalizeHost(publicOrigin.getHost()))
+        return host.equals(publicHost)
             && effectivePort(port, publicScheme) == effectivePort(publicOrigin.getPort(), publicScheme);
     }
 
@@ -109,5 +112,4 @@ final class GroundedHttpAuthorities implements ServerHttpHeaderValidator {
             throw new IllegalArgumentException("Invalid IPv6 host.", invalidAddress);
         }
     }
-
 }

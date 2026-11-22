@@ -19,7 +19,7 @@ These pins matched both remote main branches on November 21, 2026. To revise the
 | [Hosted authorization and evaluations](parity-hosted.md) | Identity, scope, public readiness, admission, evaluation jobs, resource ownership and recovery. |
 | [Operator and client workflows](parity-operations.md) | Commands, policies and profiles, providers, evaluation, local runtime, browser setup, hosted account and agent setup, packaging and release evidence. |
 
-The matrix contains 75 required rows and one optional proposal. All 75 required rows are open at the starting Java commit. Each row identifies the Python authority, the behavior to preserve, the Java owner, an acceptance case and the state of its evidence. Source inspection can establish a gap. A passing Java unit test can establish one behavior. Mark a required row verified only after its named public or packaged check passes and its review unit passes post-merge checks. For results spanning rows, link a single receipt from each affected row.
+The matrix contains 76 required rows and one optional proposal. All 76 were open at the starting Java commit. Paired HTTP discovery identified G23, the shipped modern notification subscription, after the first inventory. Each row identifies the Python authority, the behavior to preserve, the Java owner, an acceptance case and the state of its evidence. Source inspection can establish a gap. A passing Java unit test can establish one behavior. Mark a required row verified only after its named public or packaged check passes and its review unit passes post-merge checks. For results spanning rows, link a single receipt from each affected row.
 
 ## What the starting packages returned
 

@@ -135,11 +135,15 @@ public class PolicyNimProperties {
         }
 
         public String mcpUrl() {
+            return mcpUrl(streamableHttpPath);
+        }
+
+        public String mcpUrl(String endpointPath) {
             if (publicBaseUrl == null) {
                 return null;
             }
             String base = publicBaseUrl.toString().replaceAll("/+$", "");
-            return base + streamableHttpPath;
+            return base + endpointPath;
         }
 
         public AuthProperties getAuth() {

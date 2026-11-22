@@ -127,6 +127,11 @@ final class GroundedHttpServlet extends HttpServlet {
             error(response, 400, message.id(), -32602, "The request requires protocolVersion and clientCapabilities metadata");
             return;
         }
+        if (isModern && message.id() != null
+            && !version.equals(message.metadata().path("io.modelcontextprotocol/protocolVersion").textValue())) {
+            error(response, 400, message.id(), -32020, "MCP-Protocol-Version does not match the request metadata");
+            return;
+        }
         (isModern ? modern : legacy).service(replay, response);
     }
 
@@ -138,12 +143,14 @@ final class GroundedHttpServlet extends HttpServlet {
             }
             listeners.open(request, response);
         }
-        else if (!isModern && "DELETE".equals(request.getMethod())) {
-            error(response, 405, null, -32600, "Method Not Allowed: Session termination not supported");
-        }
         else {
-            response.setStatus(405);
-            response.setHeader("Allow", isModern ? "POST" : "GET, POST, DELETE");
+            response.setHeader("Allow", isModern ? "POST" : "GET, POST");
+            if (!isModern && "DELETE".equals(request.getMethod())) {
+                error(response, 405, null, -32600, "Method Not Allowed: Session termination not supported");
+            }
+            else {
+                response.setStatus(405);
+            }
         }
     }
 
@@ -157,13 +164,19 @@ final class GroundedHttpServlet extends HttpServlet {
     }
 
     private static boolean accepts(HttpServletRequest request, MediaType wanted) {
-        try {
-            return MediaType.parseMediaTypes(Collections.list(request.getHeaders("Accept"))).stream()
-                .anyMatch(range -> range.getQualityValue() > 0 && range.includes(wanted));
+        // Python MCP 2.2.0 matches media ranges before their parameters, including quality values.
+        var values = request.getHeaders("Accept");
+        String wildcard = wanted.getType() + "/*";
+        while (values.hasMoreElements()) {
+            for (String range : values.nextElement().split(",")) {
+                int parameters = range.indexOf(';');
+                String type = (parameters < 0 ? range : range.substring(0, parameters)).trim();
+                if (wanted.toString().equalsIgnoreCase(type) || wildcard.equalsIgnoreCase(type) || "*/*".equals(type)) {
+                    return true;
+                }
+            }
         }
-        catch (IllegalArgumentException malformed) {
-            return false;
-        }
+        return false;
     }
 
     private static void error(HttpServletResponse response, int status, JsonNode id, int code, String message) throws IOException {

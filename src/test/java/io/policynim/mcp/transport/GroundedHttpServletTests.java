@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.modern.server.feature.McpSyncToolRepository;
 import io.modelcontextprotocol.spec.McpSchema;
+import jakarta.servlet.ServletOutputStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -90,6 +91,119 @@ class GroundedHttpServletTests {
         finally {
             servlet.destroy();
         }
+    }
+
+    @Test
+    void distinguishesEmptyBodiesFromInvalidEnvelopesAndCorrelatesVersionDisagreement() throws Exception {
+        var servlet = servlet();
+        try {
+            for (boolean modern : List.of(true, false)) {
+                for (String value : List.of(" ", "{\"jsonrpc\":\"2.0\",\"method\":\"ping\",\"params\":[]}")) {
+                    var invalid = post(value, "application/json");
+                    if (modern) {
+                        invalid.addHeader("MCP-Protocol-Version", "2026-07-28");
+                    }
+                    var reply = send(servlet, invalid);
+                    assertThat(reply.getStatus()).isEqualTo(400);
+                    assertThat(body(reply).path("id").isNull()).isTrue();
+                    int expectedCode = value.isBlank() ? -32700 : modern ? -32600 : -32602;
+                    assertThat(body(reply).at("/error/code").asInt()).isEqualTo(expectedCode);
+                }
+            }
+            var badVersion = modern("server/discover");
+            badVersion.setContent("""
+                {"jsonrpc":"2.0","id":42,"method":"server/discover","params":{"_meta":{
+                "io.modelcontextprotocol/protocolVersion":null,"io.modelcontextprotocol/clientCapabilities":{}}}}
+                """.getBytes(StandardCharsets.UTF_8));
+            var reply = body(send(servlet, badVersion));
+            assertThat(reply.path("id").asInt()).isEqualTo(42);
+            assertThat(reply.at("/error/code").asInt()).isEqualTo(-32020);
+            assertThat(send(servlet, modern("server/discover")).getStatus()).isEqualTo(200);
+        }
+        finally {
+            servlet.destroy();
+        }
+    }
+
+    @Test
+    void acceptsJsonRangesRegardlessOfQualityLikeThePinnedReference() throws Exception {
+        var servlet = servlet();
+        try {
+            for (String accepted : List.of("application/json;q=0", "application/json;q=0, */*;q=1",
+                "*/*;q=1, application/*;q=0", "ApPlIcAtIoN/JsOn; profile=public", "application/*;q=0")) {
+                var request = modern("server/discover");
+                request.removeHeader("Accept");
+                request.addHeader("Accept", accepted);
+                assertThat(send(servlet, request).getStatus()).as(accepted).isEqualTo(200);
+            }
+            var unsupported = modern("server/discover");
+            unsupported.removeHeader("Accept");
+            unsupported.addHeader("Accept", "text/plain");
+            assertThat(send(servlet, unsupported).getStatus()).isEqualTo(406);
+        }
+        finally {
+            servlet.destroy();
+        }
+    }
+
+    @Test
+    void allowsOnlyGetAndPostForLegacyRequestsAndPostForModernRequests() throws Exception {
+        var servlet = servlet();
+        try {
+            for (String method : List.of("HEAD", "DELETE", "PATCH")) {
+                var request = new MockHttpServletRequest(method, "/policy");
+                var legacy = send(servlet, request);
+                assertThat(legacy.getStatus()).isEqualTo(405);
+                assertThat(legacy.getHeader("Allow")).isEqualTo("GET, POST");
+                request.addHeader("MCP-Protocol-Version", "2026-07-28");
+                var modern = send(servlet, request);
+                assertThat(modern.getStatus()).isEqualTo(405);
+                assertThat(modern.getHeader("Allow")).isEqualTo("POST");
+            }
+        }
+        finally {
+            servlet.destroy();
+        }
+    }
+
+    @Test
+    void rejectsExcessLegacyListenersBeforeStartingAsyncAndReusesReleasedCapacity() throws Exception {
+        var listeners = new GroundedHttpListeners(1);
+        var first = new MockHttpServletRequest("GET", "/policy");
+        first.setAsyncSupported(true);
+        var second = new MockHttpServletRequest("GET", "/policy");
+        second.setAsyncSupported(true);
+        var response = asyncResponse();
+        try {
+            listeners.open(first, response);
+            assertThat(first.isAsyncStarted()).isTrue();
+            var full = asyncResponse();
+            listeners.open(second, full);
+            assertThat(full.getStatus()).isEqualTo(429);
+            assertThat(full.getHeader("Retry-After")).isEqualTo("15");
+            assertThat(second.isAsyncStarted()).isFalse();
+
+            first.getAsyncContext().complete();
+            listeners.open(second, response);
+            assertThat(second.isAsyncStarted()).isTrue();
+        }
+        finally {
+            listeners.close();
+        }
+        assertThat(second.isAsyncStarted()).isFalse();
+        var closed = new MockHttpServletResponse();
+        listeners.open(new MockHttpServletRequest("GET", "/policy"), closed);
+        assertThat(closed.getStatus()).isEqualTo(503);
+    }
+
+    private static MockHttpServletResponse asyncResponse() {
+        var output = mock(ServletOutputStream.class);
+        return new MockHttpServletResponse() {
+            @Override
+            public ServletOutputStream getOutputStream() {
+                return output;
+            }
+        };
     }
 
     private static MockHttpServletRequest modern(String method) {

@@ -35,7 +35,7 @@ The stage owners below account for all mandatory rows. A row can rely on evidenc
 
 | Stage | Matrix rows owned |
 | --- | --- |
-| Public transport | G01–G04. H01 and H08 supply the later hosted protection checks. |
+| Public transport | G01–G04 and G23. Complete G23 with the modern SDK change feed after the corresponding tool and resource registries exist. H01 and H08 supply the later hosted protection checks. |
 | Sources and publication | G05–G06, G08–G13, O03–O07 and O21. Include the maintained index, source licenses, profile isolation and verified import/export in fresh installs. |
 | Grounded work | G07, G14–G22 and O09–O11. |
 | Identity and admission | H01–H14, O20 and O25. |

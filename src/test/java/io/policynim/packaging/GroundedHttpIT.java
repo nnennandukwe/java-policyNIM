@@ -8,16 +8,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static io.policynim.support.PackagedMcpHttp.postJson;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class GroundedHttpIT {
 
@@ -92,6 +95,28 @@ class GroundedHttpIT {
             assertThat(error.required("id").intValue()).isEqualTo(3);
             assertThat(error.required("error").required("code").intValue()).isEqualTo(-32020);
             assertModernCall(http, endpoint, token);
+        }
+        finally {
+            PackagedMcpHttp.reap(child);
+        }
+    }
+
+    @Test
+    void shutdownClosesAnOpenGroundedLegacyGetStream(@TempDir Path directory) throws Exception {
+        String token = UUID.randomUUID().toString();
+        var child = PackagedMcpHttp.startServer(directory, CONFIG, token);
+        try (var http = HttpClient.newHttpClient()) {
+            URI endpoint = PackagedMcpHttp.readBoundOrigin(child).resolve(ENDPOINT);
+            var listen = PackagedMcpHttp.request(endpoint).setHeader("Accept", "text/event-stream")
+                .header("Authorization", "Bearer " + token).header("MCP-Protocol-Version", LEGACY).GET().build();
+            var response = http.send(listen, HttpResponse.BodyHandlers.ofInputStream());
+            try (var stream = response.body()) {
+                assertThat(response.statusCode()).isEqualTo(200);
+                assertThat(response.headers().firstValue("Content-Type").orElse("")).startsWith("text/event-stream");
+                child.destroy();
+                assertThat(child.waitFor(8, TimeUnit.SECONDS)).as("shutdown with an attached GET").isTrue();
+                assertTimeoutPreemptively(Duration.ofSeconds(2), () -> stream.transferTo(OutputStream.nullOutputStream()));
+            }
         }
         finally {
             PackagedMcpHttp.reap(child);
