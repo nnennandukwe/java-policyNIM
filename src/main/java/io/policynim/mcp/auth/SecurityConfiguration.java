@@ -1,7 +1,7 @@
 package io.policynim.mcp.auth;
 
-import io.policynim.config.McpTransport;
 import io.policynim.config.PolicyNimProperties;
+import io.policynim.mcp.transport.StreamableHttpTransportMarker;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,13 +11,17 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+import java.util.Optional;
+
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfiguration {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, PolicyNimProperties properties) throws Exception {
-        boolean bearerAuthEnabled = bearerAuthEnabled(properties);
+    SecurityFilterChain securityFilterChain(
+        HttpSecurity http, PolicyNimProperties properties, Optional<StreamableHttpTransportMarker> hosted
+    ) throws Exception {
+        boolean bearerAuthEnabled = hosted.isPresent() && properties.getMcp().getAuth().isEnabled();
 
         http.csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
@@ -40,25 +44,17 @@ public class SecurityConfiguration {
         }
         else {
             http
-                .authorizeHttpRequests(authorize -> authorize
-                    .requestMatchers("/healthz", "/livez").permitAll()
-                    .requestMatchers(mcpEndpointMatchers(properties)).permitAll()
-                    .anyRequest().denyAll()
-                )
+                .authorizeHttpRequests(authorize -> {
+                    authorize.requestMatchers("/healthz", "/livez").permitAll();
+                    hosted.ifPresent(endpoint ->
+                        authorize.requestMatchers(endpoint.path(), endpoint.path() + "/**").permitAll()
+                    );
+                    authorize.anyRequest().denyAll();
+                })
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable);
         }
 
         return http.build();
-    }
-
-    private static String[] mcpEndpointMatchers(PolicyNimProperties properties) {
-        String streamableHttpPath = properties.getMcp().getStreamableHttpPath();
-        return new String[] {streamableHttpPath, streamableHttpPath + "/**"};
-    }
-
-    private static boolean bearerAuthEnabled(PolicyNimProperties properties) {
-        return properties.getMcp().getTransport() == McpTransport.STREAMABLE_HTTP
-            && properties.getMcp().getAuth().isEnabled();
     }
 }

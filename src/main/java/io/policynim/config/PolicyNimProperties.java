@@ -71,6 +71,10 @@ public class PolicyNimProperties {
             this.name = name;
         }
 
+        /**
+         * Returns the bound policynim.mcp.transport preference. Runtime startup uses
+         * {@link McpTransport#resolve(org.springframework.core.env.Environment)} to apply Spring overrides.
+         */
         public McpTransport getTransport() {
             return transport;
         }

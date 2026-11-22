@@ -98,3 +98,25 @@ class StdioBearerTokenSecurityTests {
         assertThat(applicationContext).isNotNull();
     }
 }
+
+@SpringBootTest(properties = {
+    "policynim.mcp.transport=stdio",
+    "spring.ai.mcp.server.stdio=false",
+    "spring.ai.mcp.server.protocol=STREAMABLE",
+    "spring.ai.mcp.server.streamable-http.mcp-endpoint=/policies",
+    "policynim.mcp.auth.enabled=true",
+    "policynim.mcp.auth.bearer-token=test-token"
+})
+@AutoConfigureMockMvc
+class SpringSelectedHttpSecurityTests {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Test
+    void springSelectedEndpointRequiresTheConfiguredBearerToken() throws Exception {
+        mockMvc.perform(post("/policies").contentType(MediaType.APPLICATION_JSON).content("{}"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(header().string("WWW-Authenticate", startsWith("Bearer")));
+    }
+}

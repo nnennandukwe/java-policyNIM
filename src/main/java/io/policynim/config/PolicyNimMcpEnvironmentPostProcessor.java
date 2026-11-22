@@ -3,9 +3,11 @@ package io.policynim.config;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.config.ConfigDataEnvironmentPostProcessor;
 import org.springframework.boot.env.EnvironmentPostProcessor;
+import org.springframework.boot.logging.LogFile;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.util.StringUtils;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -26,9 +28,11 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
             environment.getProperty("policynim.mcp.name")
         );
 
-        String transport = environment.getProperty("policynim.mcp.transport", McpTransport.STREAMABLE_HTTP.configValue());
-        if (McpTransport.STDIO.configValue().equalsIgnoreCase(transport)) {
+        if (McpTransport.resolve(environment) == McpTransport.STDIO) {
             putIfMissing(environment, derived, "spring.ai.mcp.server.stdio", "true");
+            if (environment.getProperty("spring.ai.mcp.server.enabled", Boolean.class, true)) {
+                configureStdioLaunch(environment, derived);
+            }
         }
         else {
             putIfMissing(environment, derived, "server.address", environment.getProperty("policynim.mcp.host"));
@@ -45,6 +49,25 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
 
         if (!derived.isEmpty()) {
             environment.getPropertySources().addLast(new MapPropertySource(PROPERTY_SOURCE_NAME, derived));
+        }
+    }
+
+    private static void configureStdioLaunch(ConfigurableEnvironment environment, Map<String, Object> derived) {
+        putIfMissing(environment, derived, "spring.main.web-application-type", "none");
+        putIfMissing(environment, derived, "spring.main.banner-mode", "off");
+        if (environment.containsProperty("logging.config")) {
+            return;
+        }
+        if (LogFile.get(environment) == null) {
+            boolean structured = StringUtils.hasText(environment.getProperty("logging.structured.format.console"));
+            derived.put(
+                "logging.config",
+                structured ? "classpath:logback-stdio-structured.xml" : "classpath:logback-stdio.xml"
+            );
+        }
+        else {
+            // Boot owns the rolling file appender. Its default console appender writes to stdout.
+            putIfMissing(environment, derived, "logging.threshold.console", "OFF");
         }
     }
 

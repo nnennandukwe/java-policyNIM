@@ -15,6 +15,7 @@ class PolicyNimPropertiesBindingTest {
         contextRunner
             .withPropertyValues(
                 "policynim.mcp.transport=stdio",
+                "spring.ai.mcp.server.stdio=false",
                 "policynim.mcp.host=0.0.0.0",
                 "policynim.mcp.port=9090",
                 "policynim.mcp.streamable-http-path=/custom-mcp",
@@ -27,6 +28,7 @@ class PolicyNimPropertiesBindingTest {
             .run(context -> {
                 PolicyNimProperties properties = context.getBean(PolicyNimProperties.class);
                 assertThat(properties.getMcp().getTransport()).isEqualTo(McpTransport.STDIO);
+                assertThat(McpTransport.resolve(context.getEnvironment())).isEqualTo(McpTransport.STREAMABLE_HTTP);
                 assertThat(properties.getMcp().getHost()).isEqualTo("0.0.0.0");
                 assertThat(properties.getMcp().getPort()).isEqualTo(9090);
                 assertThat(properties.getMcp().getStreamableHttpPath()).isEqualTo("/custom-mcp");

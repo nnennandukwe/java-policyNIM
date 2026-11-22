@@ -10,8 +10,10 @@ import java.util.Objects;
 final class HostedMcpAuthStartupGuard implements SmartInitializingSingleton {
 
     private final PolicyNimProperties properties;
+    private final McpTransport transport;
 
-    HostedMcpAuthStartupGuard(PolicyNimProperties properties) {
+    HostedMcpAuthStartupGuard(PolicyNimProperties properties, McpTransport transport) {
+        this.transport = Objects.requireNonNull(transport, "transport must not be null");
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
     }
 
@@ -19,7 +21,7 @@ final class HostedMcpAuthStartupGuard implements SmartInitializingSingleton {
     public void afterSingletonsInstantiated() {
         PolicyNimProperties.McpProperties mcp = properties.getMcp();
         if (
-            mcp.getTransport() == McpTransport.STREAMABLE_HTTP
+            transport == McpTransport.STREAMABLE_HTTP
                 && mcp.getAuth().isEnabled()
                 && !StringUtils.hasText(mcp.getAuth().getBearerToken())
         ) {
