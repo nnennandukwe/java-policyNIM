@@ -146,7 +146,7 @@ async def sdk_round_trip(label, mode, endpoint, token, tools, version):
             "negotiatedServerVersion": identity, "tools": sorted(found), "rawToolRefusals": tool_replies}
 
 
-async def raw_round_trip(endpoint, token):
+async def raw_round_trip(product, endpoint, token):
     """Check independent public error codes and a successful retry after each refusal."""
     observed = {}
     async with httpx2.AsyncClient(timeout=5, trust_env=False) as http:
@@ -206,6 +206,16 @@ async def raw_round_trip(endpoint, token):
             ("legacy error missing code", LEGACY, None, {"error": {"message": "Invalid params"}}, 400, -32602),
             ("modern posted response", MODERN, "reply", {"result": {"value": None}}, 400, -32600),
         ]
+        # Python 2.2.0 accepts these legacy replies. Java enforces the JSON-RPC member and code types.
+        strict_status, strict_code = {"java": (400, -32602), "python": (202, None)}[product]
+        invalid_replies = {
+            "legacy object result plus incomplete error": {"result": {}, "error": {}},
+            "legacy null result plus valid error": {"result": None, "error": {"code": -32602, "message": "Invalid params"}},
+            "legacy string error code": {"error": {"code": "-32602", "message": "Invalid params"}},
+            "legacy boolean error code": {"error": {"code": True, "message": "Invalid params"}},
+        }
+        posted.extend((label, LEGACY, "reply", payload, strict_status, strict_code)
+                      for label, payload in invalid_replies.items())
         observed["postedResponses"] = {}
         for label, version, reply_id, payload, status, code in posted:
             response = await http.post(endpoint, headers={"Authorization": f"Bearer {token}",
@@ -265,7 +275,7 @@ async def exercise(label, endpoint, token, tools, version):
     sessions = []
     for mode in ("legacy", "auto", MODERN):
         sessions.append(await sdk_round_trip(label, mode, endpoint, token, tools, version))
-    return {"sdk": sessions, "wireChecks": await raw_round_trip(endpoint, token)}
+    return {"sdk": sessions, "wireChecks": await raw_round_trip(label, endpoint, token)}
 
 
 async def main():

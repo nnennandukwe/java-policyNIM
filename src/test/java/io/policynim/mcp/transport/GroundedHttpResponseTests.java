@@ -22,8 +22,7 @@ class GroundedHttpResponseTests {
         "\"id\":1,\"result\":{}",
         "\"id\":\"client\",\"result\":{\"value\":null}",
         "\"id\":null,\"error\":{\"code\":-32602,\"message\":\"Invalid params\",\"data\":{\"reason\":\"missing\"}}",
-        "\"id\":0,\"error\":{\"code\":\"-32602\",\"message\":\"Invalid params\"}",
-        "\"id\":1,\"result\":{},\"error\":{}"
+        "\"id\":0,\"error\":{\"code\":-32602.0,\"message\":\"Invalid params\"}"
     })
     void acceptsLegacyResponsesAndRejectsThemOnTheModernTransport(String fields) throws Exception {
         var legacy = post(fields, "2025-11-25");
@@ -45,10 +44,17 @@ class GroundedHttpResponseTests {
         "\"id\":1,\"error\":{\"message\":\"missing code\"}",
         "\"id\":1,\"error\":{\"code\":1}",
         "\"id\":1,\"error\":{\"code\":1.5,\"message\":\"fractional code\"}",
+        "\"id\":1,\"error\":{\"code\":1.00000000000000000001,\"message\":\"fractional code\"}",
+        "\"id\":1,\"error\":{\"code\":\"-32602\",\"message\":\"string code\"}",
+        "\"id\":1,\"error\":{\"code\":true,\"message\":\"boolean code\"}",
         "\"id\":1,\"error\":{\"code\":\"bad\",\"message\":\"invalid code\"}",
-        "\"id\":1,\"error\":{\"code\":1,\"message\":2}"
+        "\"id\":1,\"error\":{\"code\":1,\"message\":2}",
+        "\"id\":1,\"result\":{},\"error\":{\"code\":1,\"message\":\"error\"}",
+        "\"id\":1,\"error\":{\"code\":1,\"message\":\"error\"},\"result\":null",
+        "\"id\":1,\"error\":null,\"result\":{}",
+        "\"id\":1,\"method\":\"ping\",\"result\":{},\"error\":{}"
     })
-    void rejectsIncompleteLegacyResponses(String fields) throws Exception {
+    void rejectsInvalidLegacyResponses(String fields) throws Exception {
         assertRejection(post(fields, "2025-11-25"), -32602);
     }
 
