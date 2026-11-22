@@ -36,12 +36,12 @@ public class PolicyMcpToolSpecificationConfiguration {
                         "topK", integerProperty("Maximum number of hits to return.")
                     )
                 ),
-                (exchange, arguments) -> invokeTool(
+                (exchange, request) -> invokeTool(
                     objectMapper,
                     () -> tools.policySearch(
-                        requiredString(arguments, "query"),
-                        optionalString(arguments, "domain"),
-                        optionalInteger(arguments, "topK")
+                        requiredString(request.arguments(), "query"),
+                        optionalString(request.arguments(), "domain"),
+                        optionalInteger(request.arguments(), "topK")
                     )
                 )
             ),
@@ -56,12 +56,12 @@ public class PolicyMcpToolSpecificationConfiguration {
                         "topK", integerProperty("Maximum number of evidence hits to use.")
                     )
                 ),
-                (exchange, arguments) -> invokeTool(
+                (exchange, request) -> invokeTool(
                     objectMapper,
                     () -> tools.policyPreflight(
-                        requiredString(arguments, "task"),
-                        optionalString(arguments, "domain"),
-                        optionalInteger(arguments, "topK")
+                        requiredString(request.arguments(), "task"),
+                        optionalString(request.arguments(), "domain"),
+                        optionalInteger(request.arguments(), "topK")
                     )
                 )
             )
@@ -74,18 +74,15 @@ public class PolicyMcpToolSpecificationConfiguration {
         String requiredProperty,
         Map<String, Object> properties
     ) {
-        return McpSchema.Tool.builder()
-            .name(name)
-            .description(description)
-            .inputSchema(new McpSchema.JsonSchema(
-                "object",
-                properties,
-                List.of(requiredProperty),
-                false,
-                Map.of(),
-                Map.of()
-            ))
-            .build();
+        Map<String, Object> inputSchema = Map.of(
+            "type", "object",
+            "properties", properties,
+            "required", List.of(requiredProperty),
+            "additionalProperties", false,
+            "$defs", Map.of(),
+            "definitions", Map.of()
+        );
+        return McpSchema.Tool.builder(name, inputSchema).description(description).build();
     }
 
     private static Map<String, Object> stringProperty(String description) {

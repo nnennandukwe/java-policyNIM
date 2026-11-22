@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-ai.version>1.1.4</spring-ai.version>
+        <mcp-sdk.version>2.2.0</mcp-sdk.version>
         <archunit.version>1.4.1</archunit.version>
         <cucumber.version>7.22.1</cucumber.version>
         <pgvector-java.version>0.1.6</pgvector-java.version>
@@ -48,11 +49,17 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-server</artifactId>
+            <artifactId>spring-ai-model</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-core</artifactId>
+            <version>${mcp-sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.modelcontextprotocol.sdk</groupId>
+            <artifactId>mcp-json-jackson2</artifactId>
+            <version>${mcp-sdk.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
