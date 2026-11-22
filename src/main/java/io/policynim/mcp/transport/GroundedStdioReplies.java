@@ -1,12 +1,13 @@
 package io.policynim.mcp.transport;
 
-import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.modern.McpStdio;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,15 +17,22 @@ import java.util.function.Consumer;
 
 /** A flushed SDK response retires an accepted request. Boundary rejections share stdout but never retire SDK work. */
 final class GroundedStdioReplies extends OutputStream {
-    private static final JsonFactory JSON = new JsonFactory();
+    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int MAX_OUTSTANDING = 1024;
     private final OutputStream output;
     private final Consumer<IOException> fail;
-    private final Map<Object, String> pending = new HashMap<>();
+    private final int capacity;
+    private final Map<Object, Boolean> pending = new HashMap<>();
     private BiConsumer<Object, Boolean> initializeReply = (id, success) -> { };
-    private Receipt writing;
+    private volatile Receipt writing;
     private boolean stopped;
 
     GroundedStdioReplies(OutputStream output, Consumer<IOException> fail) {
+        this(output, fail, MAX_OUTSTANDING);
+    }
+
+    GroundedStdioReplies(OutputStream output, Consumer<IOException> fail, int capacity) {
+        this.capacity = capacity;
         this.output = output;
         this.fail = fail;
     }
@@ -33,10 +41,42 @@ final class GroundedStdioReplies extends OutputStream {
         initializeReply = callback;
     }
 
-    void accepted(String method, Object id) {
-        synchronized (pending) {
-            pending.putIfAbsent(McpStdio.idKey(id), method);
+    boolean accepted(String method, Object id) {
+        Object key = McpStdio.idKey(id);
+        Receipt publishing = writing;
+        if (publishing != null && key.equals(McpStdio.idKey(publishing.id()))) {
+            // The peer can receive a line before the underlying flush returns. Wait for that
+            // writer alone before checking a legitimately reused ID.
+            synchronized (this) {
+                return reserve(method, id, key);
+            }
         }
+        return reserve(method, id, key);
+    }
+
+    private boolean reserve(String method, Object id, Object key) {
+        synchronized (pending) {
+            if (stopped || pending.containsKey(key)) {
+                // A second response with this ID would be ambiguous for the outstanding request.
+                return false;
+            }
+            if (pending.size() < capacity) {
+                pending.put(key, "initialize".equals(method));
+                return true;
+            }
+        }
+        // Continue reading cancellations and completions after refusing excess work.
+        var refusal = JSON.createObjectNode().put("jsonrpc", "2.0");
+        refusal.set("id", JSON.valueToTree(id));
+        refusal.putObject("error").put("code", -32603)
+            .put("message", "Too many outstanding stdio requests. Retry after an earlier request completes.");
+        try {
+            writeBoundary((refusal + "\n").getBytes(StandardCharsets.UTF_8));
+        }
+        catch (IOException closedOutput) {
+            // writeBoundary has already notified the runtime to close.
+        }
+        return false;
     }
 
     void cancelled(Object id) {
@@ -97,6 +137,10 @@ final class GroundedStdioReplies extends OutputStream {
                 writing = receipt(bytes, offset, length);
             }
             output.write(bytes, offset, length);
+            if (length > 0 && bytes[offset + length - 1] == '\n') {
+                // The modern SDK writes a whole line before calling flush outside this monitor.
+                flush();
+            }
         }
         catch (IOException failure) {
             fail.accept(failure);
@@ -114,12 +158,12 @@ final class GroundedStdioReplies extends OutputStream {
             throw failure;
         }
         if (writing != null) {
-            String method;
+            Boolean initialize;
             synchronized (pending) {
-                method = pending.remove(McpStdio.idKey(writing.id()));
+                initialize = pending.remove(McpStdio.idKey(writing.id()));
                 pending.notifyAll();
             }
-            if ("initialize".equals(method)) {
+            if (Boolean.TRUE.equals(initialize)) {
                 initializeReply.accept(writing.id(), writing.success());
             }
             writing = null;

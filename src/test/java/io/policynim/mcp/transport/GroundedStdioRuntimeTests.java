@@ -18,6 +18,7 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -39,11 +40,7 @@ class GroundedStdioRuntimeTests {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     void eofAfterRequestWaitsForItsResponseToFlush(boolean modern) throws Exception {
-        String request = modern
-            ? "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"server/discover\",\"params\":{" + META + "}}"
-            : """
-              {"jsonrpc":"2.0","id":41,"method":"initialize","params":{"protocolVersion":"2025-11-25",
-              "capabilities":{},"clientInfo":{"name":"test","version":"1"}}}""".replace("\n", "");
+        String request = opening(modern);
         var output = new ByteArrayOutputStream();
         var fixture = runtime(new ByteArrayInputStream((request + "\n").getBytes(StandardCharsets.UTF_8)), output);
         assertTimeoutPreemptively(Duration.ofSeconds(5), fixture::run);
@@ -57,6 +54,43 @@ class GroundedStdioRuntimeTests {
         else {
             assertThat(result.at("/result/protocolVersion").asText()).isEqualTo("2025-11-25");
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void pinnedSdkFlushesALargeResponseAndPreservesItsId(boolean modern) throws Exception {
+        String instructions = "Read the policy source. ".repeat(8192);
+        var settings = new McpServerSettings(new MockEnvironment()
+            .withProperty("spring.ai.mcp.server.instructions", instructions)
+            .withProperty("spring.ai.mcp.server.capabilities.tool", "false"), new PolicyNimProperties());
+        var writes = new ArrayList<Integer>();
+        var output = new ByteArrayOutputStream() {
+            @Override
+            public synchronized void write(byte[] bytes, int offset, int length) {
+                writes.add(length);
+                super.write(bytes, offset, length);
+            }
+        };
+        var input = new ByteArrayInputStream((opening(modern) + "\n").getBytes(StandardCharsets.UTF_8));
+        try (var fixture = new GroundedStdioRuntime(input, output, settings, List.of(), mock(McpSyncToolRepository.class))) {
+            assertTimeoutPreemptively(Duration.ofSeconds(5), fixture::run);
+        }
+
+        var lines = output.toString(StandardCharsets.UTF_8).lines().toList();
+        assertThat(lines).hasSize(1);
+        JsonNode reply = JSON.readTree(lines.getFirst());
+        assertThat(reply.path("id").asInt()).isEqualTo(41);
+        assertThat(reply.at("/result/instructions").textValue()).isEqualTo(instructions);
+        // The receipt reader relies on the pinned SDK writing one serialized response payload.
+        assertThat(writes).isEqualTo(modern ? List.of(output.size()) : List.of(output.size() - 1, 1));
+    }
+
+    private static String opening(boolean modern) {
+        return modern
+            ? "{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"server/discover\",\"params\":{" + META + "}}"
+            : """
+              {"jsonrpc":"2.0","id":41,"method":"initialize","params":{"protocolVersion":"2025-11-25",
+              "capabilities":{},"clientInfo":{"name":"test","version":"1"}}}""".replace("\n", "");
     }
 
     @Test

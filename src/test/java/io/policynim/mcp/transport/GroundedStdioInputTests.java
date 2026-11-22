@@ -6,12 +6,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.function.BiPredicate;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -81,8 +82,8 @@ class GroundedStdioInputTests {
         var input = input(open + request(2, "initialize", "{}") + valid);
         assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
         byte[] frame = new byte[4096];
-        int n = input.read(frame);
-        assertThat(new String(frame, 0, n, StandardCharsets.UTF_8)).isEqualTo(valid);
+        int bytesRead = input.read(frame);
+        assertThat(new String(frame, 0, bytesRead, StandardCharsets.UTF_8)).isEqualTo(valid);
         assertThat(requests).containsExactly(3);
         assertThat(replies).extracting(r -> r.at("/error/code").intValue()).containsExactly(-32602, -32602);
         input.initialized(3, true);
@@ -102,7 +103,7 @@ class GroundedStdioInputTests {
     @Test
     void retainsAFrameOfExactlyFourMiBAndDropsTheNextOversizedFrameThroughItsTerminator() throws Exception {
         String open = request(1, "tools/list", META).stripTrailing();
-        String nonAscii = open.replace("\"tools/list\"", "\"é/list\"");
+        String nonAscii = open.replace("\"tools/list\"", "\"\u00e9/list\"");
         String full = nonAscii + " ".repeat(GroundedStdioFrames.MAX_BYTES - nonAscii.getBytes(StandardCharsets.UTF_8).length);
         String follow = request(2, "tools/list", META);
         var input = input(full + "\r\n" + full + " \n" + follow.stripTrailing());
@@ -153,6 +154,111 @@ class GroundedStdioInputTests {
         assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
         assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo(list + other);
         assertThat(requests).containsExactly(1, 2);
+    }
+
+    @Test
+    void aRefusedInitializeReleasesItsWaiterAndAFreshRequestCanOpenTheConnection() throws Exception {
+        String busy = request(1, "unknown", "{}");
+        String denied = request(2, "initialize", HELLO);
+        String ping = request(3, "ping", "{}");
+        String retry = request(4, "initialize", HELLO);
+        String list = request(5, "tools/list", "{}");
+        var occupied = new AtomicBoolean();
+        var input = new GroundedStdioInput(new ByteArrayInputStream((busy + denied + ping + retry + list)
+            .getBytes(StandardCharsets.UTF_8)), line -> {
+                replies.add(JSON.readTree(line));
+                occupied.set(false);
+            }, (method, id) -> occupied.compareAndSet(false, true), cancellations::add, true, Duration.ofSeconds(2));
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
+        assertThat(readFrame(input)).isEqualTo(busy);
+        assertThat(readFrame(input)).isEqualTo(retry);
+        assertThat(replies.getFirst().required("id").intValue()).isEqualTo(3);
+        occupied.set(false);
+        input.initialized(4, true);
+        assertThat(readFrame(input)).isEqualTo(list);
+    }
+
+    @Test
+    void aFailedInitializeReceiptKeepsToolsClosedAndAllowsTheNextHandshake() throws Exception {
+        String first = request(1, "initialize", HELLO);
+        String retry = request(3, "initialize", HELLO);
+        String follow = request(4, "tools/list", "{}");
+        var input = input(first + request(2, "tools/list", "{}") + retry + follow);
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
+        assertThat(readFrame(input)).isEqualTo(first);
+        input.initialized(1, false);
+        assertThat(readFrame(input)).isEqualTo(retry);
+        assertThat(replies.getFirst().at("/error/code").intValue()).isEqualTo(-32602);
+        input.initialized(3, true);
+        assertThat(readFrame(input)).isEqualTo(follow);
+        assertThat(input.read()).isEqualTo(-1);
+    }
+
+    @Test
+    void duplicateMembersAndMalformedEnvelopesDoNotReachTheSdkAndRecoveryUsesTheSelectedEra() throws Exception {
+        String start = request(1, "tools/list", META);
+        String follow = request(2, "tools/list", META);
+        String wholeError = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":1.0,\"message\":\"test\"}}\n";
+        var input = input(start
+            + "{\"jsonrpc\":\"2.0\",\"id\":2,\"id\":2,\"method\":\"ping\"}\n"
+            + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"result\":{}}\n"
+            + "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":1.0000000000000000001,\"message\":\"test\"}}\n"
+            + wholeError + follow);
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.MODERN);
+        assertThat(new String(input.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo(start + wholeError + follow);
+        assertThat(requests).containsExactly(1, 2);
+    }
+
+    @Test
+    void anExplicitlyFailedHandshakeCannotBeCompletedByAStrayReadyNotification() throws Exception {
+        String valid = request(3, "initialize", HELLO);
+        String follow = request(4, "tools/list", "{}");
+        var input = input(request(1, "initialize", "{}")
+            + "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n"
+            + request(2, "tools/list", "{}") + valid + follow);
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
+        assertThat(readFrame(input)).isEqualTo(valid);
+        assertThat(replies).extracting(r -> r.at("/error/code").intValue()).containsExactly(-32602, -32602);
+        input.initialized(3, true);
+        assertThat(readFrame(input)).isEqualTo(follow);
+    }
+
+    @Test
+    void anOversizedIntegerIdSelectsItsEraAndReceivesACorrelatedRejectionBeforeAdmission() throws Exception {
+        BigInteger wide = BigInteger.valueOf(Long.MAX_VALUE).add(BigInteger.ONE);
+        String modern = request(Long.MIN_VALUE, "tools/list", META);
+        var input = input(request(wide, "tools/list", META) + modern);
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.MODERN);
+        assertThat(readFrame(input)).isEqualTo(modern);
+        String valid = request("\"" + wide + "\"", "initialize", HELLO);
+        var legacy = input(request(wide, "initialize", HELLO) + valid);
+        assertThat(legacy.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
+        assertThat(readFrame(legacy)).isEqualTo(valid);
+        assertThat(requests).containsExactly(Long.MIN_VALUE, wide.toString());
+        assertThat(replies).extracting(r -> r.required("id").bigIntegerValue()).containsExactly(wide, wide);
+        assertThat(replies).extracting(r -> r.at("/error/code").intValue()).containsExactly(-32600, -32600);
+    }
+
+    @Test
+    void legacyIgnoresUncorrelatableErrorsBeforeAndAfterOpeningAndKeepsProcessingRequests() throws Exception {
+        String unattributed = "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":-32600,\"message\":\"invalid\"}}\n";
+        String wideCode = "{\"jsonrpc\":\"2.0\",\"id\":10,\"error\":{\"code\":3000000000,\"message\":\"example\"}}\n";
+        String supported = "{\"jsonrpc\":\"2.0\",\"id\":10,\"error\":{\"code\":-32600,\"message\":\"invalid\"}}\n";
+        String init = request(1, "initialize", HELLO);
+        String list = request(2, "tools/list", "{}");
+        var input = input(unattributed + wideCode + supported + init + unattributed + wideCode + list);
+        assertThat(input.select()).isEqualTo(GroundedStdioInput.Era.LEGACY);
+        assertThat(readFrame(input)).isEqualTo(supported);
+        assertThat(readFrame(input)).isEqualTo(init);
+        input.initialized(1, true);
+        assertThat(readFrame(input)).isEqualTo(list);
+        assertThat(input.read()).isEqualTo(-1);
+        assertThat(replies).isEmpty();
+    }
+
+    private static String readFrame(GroundedStdioInput input) throws Exception {
+        byte[] frame = new byte[4096];
+        return new String(frame, 0, input.read(frame), StandardCharsets.UTF_8);
     }
 
     private GroundedStdioInput input(String text) {

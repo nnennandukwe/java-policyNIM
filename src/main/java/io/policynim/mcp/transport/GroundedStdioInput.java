@@ -9,11 +9,12 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 /** Selects one SDK from the opening request and exposes only that connection's accepted frames. */
@@ -30,8 +31,10 @@ final class GroundedStdioInput extends InputStream {
 
     private final GroundedStdioFrames source;
     private final ErrorWriter replies;
-    private final BiConsumer<String, Object> onRequest;
+    private final BiPredicate<String, Object> onRequest;
     private final Consumer<Object> onCancel;
+    private final boolean toolsEnabled;
+    private final long initializeWaitNanos;
     private final ArrayDeque<GroundedStdioFrames.Frame> replay = new ArrayDeque<>();
     private ByteArrayInputStream current = new ByteArrayInputStream(new byte[0]);
     private Era era;
@@ -40,13 +43,16 @@ final class GroundedStdioInput extends InputStream {
 
     private Object pendingInit;
     private volatile boolean initialized;
+    private volatile boolean initializeRefused;
 
-    GroundedStdioInput(InputStream source, ErrorWriter replies, BiConsumer<String, Object> onRequest,
-        Consumer<Object> onCancel) {
+    GroundedStdioInput(InputStream source, ErrorWriter replies, BiPredicate<String, Object> onRequest,
+        Consumer<Object> onCancel, boolean toolsEnabled, Duration initializeTimeout) {
         this.source = new GroundedStdioFrames(source);
         this.replies = replies;
         this.onRequest = onRequest;
         this.onCancel = onCancel;
+        this.toolsEnabled = toolsEnabled;
+        initializeWaitNanos = initializeTimeout.toNanos();
     }
 
     Era select() throws IOException {
@@ -104,7 +110,15 @@ final class GroundedStdioInput extends InputStream {
 
     private boolean forward(GroundedStdioFrames.Frame frame) throws IOException {
         if (!frame.isRequest()) {
+            // Null-ID errors can't answer a server request. The legacy SDK rejects them in its message constructor.
+            if (era == Era.LEGACY && frame.method() == null && frame.id() == null) {
+                return false;
+            }
             if (era == Era.LEGACY && "notifications/initialized".equals(frame.method())) {
+                awaitInitializeReply();
+                if (closed || initialized || initializeRefused) {
+                    return false;
+                }
                 initialized = true;
             }
             else if (era == Era.MODERN && "notifications/cancelled".equals(frame.method()) && frame.cancelledId() != null) {
@@ -113,6 +127,14 @@ final class GroundedStdioInput extends InputStream {
             return true;
         }
         boolean handshake = "initialize".equals(frame.method());
+        // The two SDK request constructors accept Integer and Long, while the wire ID can be wider.
+        if (frame.hasWideId()) {
+            if (era == Era.LEGACY && handshake) {
+                initializeRefused = true;
+            }
+            write(error(frame, -32600, "Numeric request ID exceeds the supported signed 64-bit range."));
+            return false;
+        }
         if (era == Era.MODERN && handshake) {
             var error = error(frame, -32022, "The connection serves the modern protocol and cannot initialize.");
             var data = error.withObject("/error/data");
@@ -132,12 +154,20 @@ final class GroundedStdioInput extends InputStream {
                 return false;
             }
         }
-        onRequest.accept(frame.method(), frame.id());
-        return true;
+        if (onRequest.test(frame.method(), frame.id())) {
+            return true;
+        }
+        if (handshake) {
+            initialized(frame.id(), false);
+        }
+        return false;
     }
 
     private boolean legacyRequest(GroundedStdioFrames.Frame frame, boolean handshake) throws IOException {
         awaitInitializeReply();
+        if (closed) {
+            return false;
+        }
         if (handshake) {
             if (frame.validInitialize()) {
                 synchronized (this) {
@@ -145,6 +175,7 @@ final class GroundedStdioInput extends InputStream {
                 }
                 return true;
             }
+            initializeRefused = true;
             invalidParams(frame);
             return false;
         }
@@ -155,7 +186,7 @@ final class GroundedStdioInput extends InputStream {
                 write(response);
                 return false;
             }
-            if ("tools/list".equals(frame.method()) || "tools/call".equals(frame.method())) {
+            if (toolsEnabled && ("tools/list".equals(frame.method()) || "tools/call".equals(frame.method()))) {
                 invalidParams(frame);
                 return false;
             }
@@ -166,13 +197,16 @@ final class GroundedStdioInput extends InputStream {
     synchronized void initialized(Object id, boolean success) {
         if (pendingInit != null && pendingInit.equals(McpStdio.idKey(id))) {
             pendingInit = null;
-            initialized |= success;
+            initializeRefused = !success;
+            if (success) {
+                initialized = true;
+            }
             notifyAll();
         }
     }
 
     private synchronized void awaitInitializeReply() throws IOException {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+        long deadline = System.nanoTime() + initializeWaitNanos;
         while (pendingInit != null && !closed) {
             long remaining = deadline - System.nanoTime();
             if (remaining <= 0) {

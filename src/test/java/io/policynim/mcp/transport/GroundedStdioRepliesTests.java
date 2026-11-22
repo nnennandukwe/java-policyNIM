@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +44,30 @@ class GroundedStdioRepliesTests {
         assertThat(lines).hasSize(2);
         assertThat(json.readTree(lines.get(0)).path("id").asInt()).isEqualTo(1);
         assertThat(json.readTree(lines.get(1)).path("id").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void fullLedgerRefusesFreshWorkPreservesExistingOwnershipAndReusesReleasedCapacity() throws Exception {
+        var sink = new ByteArrayOutputStream();
+        var replies = new GroundedStdioReplies(sink, failure -> { throw new AssertionError(failure); }, 1);
+        assertThat(replies.accepted("tools/list", 1)).isTrue();
+        assertThat(replies.accepted("server/discover", 1L)).isFalse();
+        assertThat(sink.size()).isZero();
+        assertThat(replies.accepted("tools/list", "1")).isFalse();
+        var refusal = new ObjectMapper().readTree(sink.toByteArray());
+        assertThat(refusal.path("id").textValue()).isEqualTo("1");
+        assertThat(refusal.at("/error/code").intValue()).isEqualTo(-32603);
+        assertThat(refusal.at("/error/message").textValue()).contains("Retry");
+        // A guard error with a colliding ID can't retire the outstanding SDK request.
+        replies.writeBoundary("{\"jsonrpc\":\"2.0\",\"id\":1,\"error\":{\"code\":-32600,\"message\":\"Invalid\"}}\n"
+            .getBytes(StandardCharsets.UTF_8));
+        assertThatThrownBy(() -> replies.awaitFlush(Duration.ofMillis(1))).isInstanceOf(IOException.class);
+        replies.cancelled(1L);
+        assertThat(replies.accepted("tools/list", "1")).isTrue();
+        replies.write("{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{}}\n".getBytes(StandardCharsets.UTF_8));
+        replies.flush();
+        replies.awaitFlush(Duration.ofMillis(1));
+        assertThat(replies.accepted("tools/list", "1")).isTrue();
     }
 
     @Test

@@ -11,6 +11,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 
 /** Reads a single bounded UTF-8 frame and keeps any pipelined bytes in the same buffer. */
@@ -19,10 +22,14 @@ final class GroundedStdioFrames implements Closeable {
     private static final String VERSION_KEY = "io.modelcontextprotocol/protocolVersion";
     private static final JsonMapper JSON = JsonMapper.builder()
         .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
+        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
 
     record Frame(byte[] bytes, String method, Object id, boolean stamped, String proposedVersion,
         boolean validInitialize, Object cancelledId) {
+        boolean hasWideId() {
+            return id instanceof BigInteger;
+        }
+
         boolean isRequest() {
             return method != null && id != null;
         }
@@ -72,9 +79,10 @@ final class GroundedStdioFrames implements Closeable {
     private Frame decode(byte[] bytes) {
         JsonNode node;
         try {
-            node = JSON.readTree(new String(bytes, StandardCharsets.UTF_8));
+            var text = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes));
+            node = JSON.readTree(text.toString());
         }
-        catch (JsonProcessingException invalid) {
+        catch (JsonProcessingException | CharacterCodingException invalid) {
             return DROPPED;
         }
         if (node == null || !"2.0".equals(node.path("jsonrpc").textValue())) {
@@ -85,11 +93,17 @@ final class GroundedStdioFrames implements Closeable {
             if (node.has("method") || node.has("params") || node.has("result") == node.has("error")) {
                 return DROPPED;
             }
+            if (id instanceof BigInteger) {
+                return DROPPED;
+            }
             boolean result = id != null && node.path("result").isObject();
             JsonNode error = node.path("error");
-            boolean failure = (id != null || node.path("id").isNull()) && error.path("code").isIntegralNumber()
+            var code = error.path("code");
+            boolean wholeCode = code.isIntegralNumber() || (code.isBigDecimal() && code.decimalValue().stripTrailingZeros().scale() <= 0);
+            // Both SDK error models use Integer. Neither grounded tool sends requests back to its client.
+            boolean failure = (id != null || node.path("id").isNull()) && wholeCode && code.canConvertToInt()
                 && error.path("message").isTextual();
-            return result || failure ? new Frame(bytes, null, null, false, null, false, null) : DROPPED;
+            return result || failure ? new Frame(bytes, null, id, false, null, false, null) : DROPPED;
         }
         String method = node.path("method").textValue();
         JsonNode params = node.path("params");
@@ -106,7 +120,7 @@ final class GroundedStdioFrames implements Closeable {
     }
 
     private static Object id(JsonNode node) {
-        if (node.isIntegralNumber() && node.canConvertToLong()) {
+        if (node.isIntegralNumber()) {
             return node.numberValue();
         }
         return node.textValue();

@@ -31,6 +31,7 @@ public final class GroundedStdioRuntime implements AutoCloseable {
     private final CompletableFuture<Void> end = new CompletableFuture<>();
     private final AtomicReference<IOException> failure = new AtomicReference<>();
     private volatile boolean closed;
+    private boolean started;
     private Pipe pipe;
     private Thread reader;
     private GroundedStdioInput frames;
@@ -45,19 +46,25 @@ public final class GroundedStdioRuntime implements AutoCloseable {
     }
 
     public void run() throws IOException, InterruptedException {
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            if (started) {
+                throw new IllegalStateException("The grounded stdio runtime already started");
+            }
+            started = true;
+        }
         try {
             synchronized (this) {
                 if (closed) {
                     return;
                 }
-                if (pipe != null) {
-                    throw new IllegalStateException("The grounded stdio runtime already started");
-                }
                 // System.in can block in a native read. Only this daemon owns it. Both SDKs read
                 // an interruptible pipe, so closing the runtime also releases the legacy SDK's reader.
                 pipe = Pipe.open();
                 frames = new GroundedStdioInput(Channels.newInputStream(pipe.source()), replies::writeBoundary,
-                    replies::accepted, replies::cancelled);
+                    replies::accepted, replies::cancelled, settings.enabled("capabilities.tool"), settings.requestTimeout());
                 reader = Thread.ofPlatform().daemon().name("policynim-stdin").start(this::copyStdin);
             }
             var era = frames.select();
@@ -201,13 +208,15 @@ public final class GroundedStdioRuntime implements AutoCloseable {
     }
 
     private final class DrainingInput extends FilterInputStream {
+        private final byte[] single = new byte[1];
+
         DrainingInput(InputStream input) {
             super(input);
         }
 
         @Override
         public int read() throws IOException {
-            return observed(super.read());
+            return read(single, 0, 1) < 0 ? -1 : Byte.toUnsignedInt(single[0]);
         }
 
         @Override

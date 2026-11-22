@@ -199,6 +199,34 @@ async def eof_checks(parameters, product, tools):
     return {"beforeSelection": 0, "activeExit": 0, "activeReplyIds": received}
 
 
+async def wide_id_checks(parameters, product, tools):
+    """Check one integer beyond Java's signed long range and retry using its string spelling."""
+    wide_id = 2**63
+    observed = {}
+    for era, method, params in (("modern", "tools/list", MODERN_META), ("legacy", "initialize", INITIALIZE)):
+        async with raw_server(parameters) as child:
+            results = []
+            for request_id in (wide_id, str(wide_id)):
+                await send(child, request(request_id, method, params))
+                reply = (await replies(child, request_id))[request_id]
+                require(type(reply["id"]) is type(request_id), f"{era}: the server changed the ID's JSON type")
+                code = None
+                if product == "java" and request_id == wide_id:
+                    code = reply["error"]["code"]
+                    require(code == -32600, f"{era}: expected a correlated refusal for the wide integer ID")
+                elif era == "modern":
+                    tool_list(reply, tools, True)
+                else:
+                    require(reply["result"]["protocolVersion"] == LEGACY, "Expected a successful legacy initialize.")
+                results.append({"id": reply["id"], "errorCode": code})
+            if era == "legacy":
+                await send(child, INITIALIZED, request("list", "tools/list", {}))
+                tool_list((await replies(child, "list"))["list"], tools, False)
+            require(not await eof(child), f"{era}: unexpected output after the wide ID retry")
+            observed[era] = results
+    return observed
+
+
 async def main():
     """Compare the installed services from private working directories and print their observed wire results."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -226,6 +254,7 @@ async def main():
                 "sdk": await sdk_checks(params, tools, version),
                 "modern": await modern_checks(params, product, tools),
                 "legacy": await legacy_checks(params, tools),
+                "wideId": await wide_id_checks(params, product, tools),
                 "eof": await eof_checks(params, product, tools),
             }
     with jar.open("rb") as artifact:
