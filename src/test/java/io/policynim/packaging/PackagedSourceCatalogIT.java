@@ -199,6 +199,12 @@ class PackagedSourceCatalogIT {
                 "--corpus-root=" + source).json(0).required("effective_count").intValue());
             var direct = Map.of("POLICYNIM_CONFIG_FILE", config.toString(), "POLICYNIM_CORPUS_DIR", "../custom");
             assertEquals(1, cli.run(direct, validate).json(0).required("effective_count").intValue());
+            Files.writeString(config, "POLICYNIM_PROFILE='private-value' trailing\n", UTF_8);
+            assertTrue(cli.run(env, validate).sourceError().contains("POLICYNIM_PROFILE"));
+            assertEquals(1, cli.run(direct, validate).json(0).required("effective_count").intValue());
+            Files.writeString(config, "POLICYNIM_PROFILE=team.toml\n", UTF_8);
+            String conflict = cli.run(direct, validate).sourceError();
+            assertTrue(conflict.contains("POLICYNIM_PROFILE") && conflict.contains("POLICYNIM_CORPUS_DIR"));
             Files.writeString(config, "POLICYNIM_CORPUS_DIR=../custom\n", UTF_8);
             assertEquals(1, cli.run(env, validate).json(0).required("effective_count").intValue());
         }

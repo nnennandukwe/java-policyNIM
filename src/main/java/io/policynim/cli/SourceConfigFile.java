@@ -56,7 +56,9 @@ record SourceConfigFile(String corpus, String profile) {
         }
         for (String name : malformedSelectors) {
             String setting = name.toUpperCase(Locale.ROOT);
-            if (!environment.containsKey(setting)) {
+            String otherSetting = setting.equals("POLICYNIM_PROFILE") ? "POLICYNIM_CORPUS_DIR" : "POLICYNIM_PROFILE";
+            String otherProcessSource = SourceMarkdownParser.strip(environment.getOrDefault(otherSetting, ""));
+            if (!environment.containsKey(setting) && otherProcessSource.isEmpty()) {
                 throw new InvalidPolicyDocumentException("Invalid " + setting + " assignment in POLICYNIM_CONFIG_FILE. "
                     + "Check its quoting or pass --corpus-root=<path>.");
             }

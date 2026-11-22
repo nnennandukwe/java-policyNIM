@@ -96,6 +96,20 @@ class SourceConfigFileTests {
     }
 
     @Test
+    void explicitProcessSourceWinsWhenTheOtherFileSelectorIsMalformed() throws IOException {
+        String malformedProfile = "POLICYNIM_PROFILE=\"ignored\" trailing\n";
+        var corpus = Map.of("POLICYNIM_CORPUS_DIR", "selected");
+        assertEquals(new SourceConfigFile(null, null), read(malformedProfile, corpus));
+        assertThrows(InvalidPolicyDocumentException.class,
+            () -> read(malformedProfile, Map.of("POLICYNIM_CORPUS_DIR", " \u00a0 ")));
+        // Keep any valid competing selector for the caller's conflict check.
+        assertEquals(new SourceConfigFile(null, "retained.toml"),
+            read("POLICYNIM_PROFILE=retained.toml\n" + malformedProfile, corpus));
+        assertEquals(new SourceConfigFile(null, null),
+            read("POLICYNIM_CORPUS_DIR='ignored' trailing\n", Map.of("POLICYNIM_PROFILE", "selected.toml")));
+    }
+
+    @Test
     void unrelatedMalformedStatementsDontHideLaterValidBindings() throws IOException {
         var settings = read("NOT A VALID KEY=value\nNOTE=\"ignored\" trailing\n"
             + "POLICYNIM_CORPUS_DIR=selected");
