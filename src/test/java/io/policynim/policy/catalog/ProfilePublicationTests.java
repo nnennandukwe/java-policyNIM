@@ -2,6 +2,7 @@ package io.policynim.policy.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -20,7 +21,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProfilePublicationTests {
-    @TempDir Path workspace;
+    private Path workspace;
+
+    @BeforeEach
+    void selectPublicationDirectory(@TempDir Path directory) throws IOException {
+        // ProfileInitializer resolves existing directories before passing the destination to the publisher.
+        workspace = directory.toRealPath();
+    }
 
     @Test
     void refusesAVirtualFilesystemBeforeCreatingItsOutputParent() throws IOException {

@@ -12,6 +12,7 @@ import java.nio.file.Path;
 
 /** Publishes a complete new profile in the directory opened for this operation. */
 class ProfilePublication {
+    /** The caller resolves existing parent directories to their real paths before publication creates any missing ones. */
     void publish(Path output, String contents) throws IOException {
         if (output.getFileSystem() != FileSystems.getDefault()) {
             throw new InvalidPolicyDocumentException("Choose a profile destination on the local filesystem.");
