@@ -16,11 +16,13 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 
 
 def require(condition, message):
+    """Fail the check even when Python runs in optimized mode."""
     if not condition:
         raise ValueError(message)
 
 
 def jar_version(jar):
+    """Read the version Maven recorded in the supplied executable jar."""
     with zipfile.ZipFile(jar) as archive:
         manifest = archive.read("META-INF/MANIFEST.MF").decode("utf-8")
     for line in manifest.splitlines():
@@ -30,6 +32,7 @@ def jar_version(jar):
 
 
 async def check_java_discovery(client):
+    """Exercise the discovery methods advertised by the original Java server."""
     capabilities = client.session.initialize_result.capabilities.model_dump(by_alias=True, exclude_none=True)
     expected = {
         "completions": {},
@@ -46,6 +49,7 @@ async def check_java_discovery(client):
 
 
 async def probe(label, program, arguments, root, version, tool_names):
+    """Run one installed server from a clean directory and check its legacy session."""
     home = root / label
     home.mkdir()
     config = home / "empty.env"
@@ -84,6 +88,7 @@ async def probe(label, program, arguments, root, version, tool_names):
 
 
 async def main():
+    """Check each product with the same client and identify the Java artifact tested."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--jar", required=True, type=Path)
     parser.add_argument("--java", default=shutil.which("java"), help="Java 21 executable")
