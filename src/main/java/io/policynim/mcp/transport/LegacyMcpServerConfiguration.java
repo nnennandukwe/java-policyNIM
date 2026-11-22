@@ -50,16 +50,12 @@ class LegacyMcpServerConfiguration {
 
     @Bean(destroyMethod = "closeGracefully")
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
-    @Conditional(StreamableHttpTransportCondition.class)
+    @Conditional(StatefulHttpCondition.class)
     McpSyncServer streamableHttpMcpServer(McpStreamableServerTransportProvider transport) {
         return build(McpServer.sync(transport));
     }
 
-    private McpSyncServer build(McpServer.SyncSpecification<?> builder) {
-        String artifactVersion = LegacyMcpServerConfiguration.class.getPackage().getImplementationVersion();
-        String version = environment.getProperty(PREFIX + "version", artifactVersion == null ? "development" : artifactVersion);
-        Duration requestTimeout = Binder.get(environment).bind(PREFIX + "request-timeout", Duration.class)
-            .orElse(Duration.ofSeconds(20));
+    McpSyncServer build(McpServer.SyncSpecification<?> builder) {
         var capabilities = McpSchema.ServerCapabilities.builder();
         if (enabled("capabilities.tool")) {
             capabilities.tools(enabled("tool-change-notification"));
@@ -74,23 +70,51 @@ class LegacyMcpServerConfiguration {
         if (enabled("capabilities.completion")) {
             capabilities.completions();
         }
-        return builder.serverInfo(environment.getProperty(PREFIX + "name", properties.getMcp().getName()), version)
+        return builder.serverInfo(serverInfo())
             .instructions(environment.getProperty(PREFIX + "instructions"))
-            .requestTimeout(requestTimeout)
+            .requestTimeout(requestTimeout())
             .capabilities(capabilities.build())
             // Existing Java clients receive tool-owned validation errors and can omit optional values via null.
             .validateToolInputs(false)
             .build();
     }
 
-    private boolean enabled(String property) {
+    McpSchema.Implementation serverInfo() {
+        String artifactVersion = LegacyMcpServerConfiguration.class.getPackage().getImplementationVersion();
+        String version = environment.getProperty(PREFIX + "version",
+            artifactVersion == null ? "development" : artifactVersion);
+        return new McpSchema.Implementation(environment.getProperty(PREFIX + "name", properties.getMcp().getName()), version);
+    }
+
+    Duration requestTimeout() {
+        return Binder.get(environment).bind(PREFIX + "request-timeout", Duration.class).orElse(Duration.ofSeconds(20));
+    }
+
+    boolean enabled(String property) {
         return environment.getProperty(PREFIX + property, Boolean.class, true);
+    }
+
+    static final class StatefulHttpCondition implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            var environment = context.getEnvironment();
+            return McpTransport.resolve(environment) == McpTransport.STREAMABLE_HTTP
+                && LegacyHttpProtocol.resolve(environment) == LegacyHttpProtocol.STREAMABLE;
+        }
     }
 
     static final class StdioCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            return McpTransport.resolve(context.getEnvironment()) == McpTransport.STDIO;
+            var environment = context.getEnvironment();
+            if (McpTransport.resolve(environment) != McpTransport.STDIO) {
+                return false;
+            }
+            if (LegacyHttpProtocol.resolve(environment) == LegacyHttpProtocol.STATELESS) {
+                throw new IllegalArgumentException(LegacyHttpProtocol.PROPERTY + "=STATELESS requires HTTP. "
+                    + "Use STREAMABLE or SSE with stdio.");
+            }
+            return true;
         }
     }
 }

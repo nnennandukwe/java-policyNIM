@@ -90,10 +90,14 @@ Start the SDK branch from **ea95f7c853feba21615b2d3bc8a579b00a71ab85** once the 
 
 ### Reproduce the paired stdio check
 
-Build the Java jar with the package command in the hosted runbook. From an isolated archive of Python `fcc5322a6672b0275dcc6e0c299e631df8e8de19`, run `uv sync --frozen` to install its CLI and locked MCP client. From the Java checkout, use that Python environment to launch both installed processes.
+Build the Java jar with the package command in the hosted runbook. From the Java checkout, extract the exact Python revision into a temporary directory and install its locked environment there. The offline command requires the dependencies in the local uv cache.
 
 ```bash
-/path/to/python-archive/.venv/bin/python src/test/parity/legacy_stdio.py --jar target/policynim.jar
+set -e -o pipefail
+reference_dir="$(mktemp -d)"
+git -C /path/to/policyNIM archive fcc5322a6672b0275dcc6e0c299e631df8e8de19 | tar -x -C "$reference_dir"
+uv sync --frozen --offline --project "$reference_dir"
+"$reference_dir/.venv/bin/python" src/test/parity/legacy_stdio.py --jar target/policynim.jar
 ```
 
 The check creates a temporary home for each server, verifies its negotiated revision and installed version, calls search without a required query, and lists tools again on the same session. Java and Python each have their own expected tool names for this migration. The result includes the jar checksum. [Package checks](../hosted-runbook.md)

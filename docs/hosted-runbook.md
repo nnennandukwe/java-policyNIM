@@ -49,7 +49,7 @@ Default behavior:
 - NVIDIA provider: disabled
 - Hosted bearer auth: disabled
 
-With `noop` storage, `/healthz` reports not-ready for retrieval-serving traffic. That is expected until JDBC storage is configured and policy chunks are ingested.
+With `noop` storage, `/healthz` reports not-ready for retrieval-serving traffic. Configure JDBC storage and ingest policy chunks to make retrieval available.
 
 ## Connect a local MCP client over stdio
 
@@ -62,6 +62,16 @@ POLICYNIM_MCP_TRANSPORT=stdio java -jar /absolute/path/to/policynim.jar
 The client sends JSON-RPC on stdin and reads replies on stdout. By default the jar writes diagnostics to stderr, opens without a web listener and exits when the client closes stdin. If you configure file logging, read diagnostics at the configured location. Keep an explicit logging configuration or banner override from writing to stdout. The same JDBC and provider settings apply when a client needs policy retrieval.
 
 Set `spring.ai.mcp.server.stdio=true` to select stdio or `false` to select HTTP. That explicit setting takes precedence over `policynim.mcp.transport`. The supported HTTP spelling is `false`, ignoring case. The effective HTTP endpoint and bearer configuration also apply when an explicit Spring setting selects HTTP.
+
+## Connect an existing HTTP client
+
+The default Streamable HTTP endpoint is `/mcp`. Initialize a session and send its `Mcp-Session-Id` header on subsequent requests. If bearer authentication is enabled, each request also needs its bearer token. A missing session ID returns 400. An unknown, deleted, or expired session ID returns 404. Initialize a fresh session to recover.
+
+By default, the maintenance timer checks idle sessions every 30 minutes. The servlet keeps active requests and attached streams. It pings idle listeners to detect abandoned connections. Set `spring.ai.mcp.server.streamable-http.session-idle-timeout` to a positive duration to change the interval. Clients can release sessions immediately with HTTP DELETE.
+
+For clients that use the earlier SSE protocol, set `spring.ai.mcp.server.protocol=SSE`. The default events path is `/sse`. A bearer-authenticated client follows the endpoint event to `/mcp/message`. The explicit `STATELESS` Spring option preserves the previous Java server's empty tool registry.
+
+By default, server discovery reports the version in the jar manifest. The existing `spring.ai.mcp.server.name` and `spring.ai.mcp.server.version` overrides select the identity a client sees.
 
 ## Hosted Runtime Configuration
 

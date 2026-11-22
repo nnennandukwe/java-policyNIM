@@ -6,8 +6,8 @@ import io.policynim.config.PolicyNimProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
-import org.springframework.context.annotation.Bean;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 import java.util.List;
@@ -47,7 +47,7 @@ class LegacyMcpServerConfigurationTests {
 
     @TestConfiguration(proxyBeanMethods = false)
     @EnableConfigurationProperties(PolicyNimProperties.class)
-    @Import({McpBootstrapConfiguration.class, LegacyMcpServerConfiguration.class})
+    @Import({McpBootstrapConfiguration.class, LegacyMcpServerConfiguration.class, LegacyHttpTransportConfiguration.class})
     static class TestBeans {
 
         @Bean
@@ -55,5 +55,4 @@ class LegacyMcpServerConfigurationTests {
             return List.of();
         }
     }
-
 }
