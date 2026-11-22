@@ -176,6 +176,10 @@ def check_explicit(cli, readers, fixture):
     initialize(cli, quoted, ["--pack", "quoted pack"])
     require(f'"{pid}" =' in (cli.cwd / quoted).read_text("utf-8"), "Dotted policy ID needs a quoted TOML key")
     read_both(readers, cli, quoted, local_report(cli.cwd / quoted))
+    shutil.copytree(cli.cwd / "team", cli.cwd / "--help")
+    option_name = "profiles/option-value.toml"
+    init = initialize(cli, option_name, ["--pack", "--help"])
+    match([p["pack_id"] for p in init["profile"]["packs"]], ["review.team"], "An option-shaped local pack name")
     check_changes(cli, fixture, name)
     if cli.product == "java" and os.name == "posix":
         check_literal_pack_paths(cli, readers)

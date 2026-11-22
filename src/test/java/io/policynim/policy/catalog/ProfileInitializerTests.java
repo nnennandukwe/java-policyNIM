@@ -70,13 +70,15 @@ class ProfileInitializerTests {
 
     @Test
     void serializesQuotedKeysAndSpecialStringsAsTOML10() throws Exception {
-        String specialId = "rule.\"\\\uD83E\uDD89";
+        // # non-English test data
+        String supplementaryCharacter = "\uD83E\uDD89";
+        String specialId = "rule.\"\\" + supplementaryCharacter;
         String relative = "team # \"quoted\"";
         String sha = "sha256:" + "a".repeat(64);
         var pin = new PolicyProfile.Pin(relative, "team.pack", "1.0.0", sha, Map.of(specialId, sha));
         var profile = new PolicyProfile("example", List.of(pin), List.of(), List.of(), List.of());
         var text = InitialProfileToml.render(profile);
-        assertThat(text).contains("\uD83E\uDD89").contains("team # \\\"quoted\\\"");
+        assertThat(text).contains(supplementaryCharacter).contains("team # \\\"quoted\\\"");
         var output = workspace.resolve("quoted.toml");
         Files.writeString(output, text);
         assertThat(ProfileToml.read(output).json()).isEqualTo(profile.json());

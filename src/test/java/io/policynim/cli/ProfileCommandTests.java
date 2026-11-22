@@ -102,6 +102,17 @@ class ProfileCommandTests {
     }
 
     @Test
+    void consumesTheNextTokenAsAnExplicitOptionValue(@TempDir Path dir) {
+        Path output = dir.resolve("review.toml");
+        assertThat(run("profile", "init", output.toString(), "--id")).isEqualTo(2);
+        err.reset();
+        assertThat(run("profile", "init", output.toString(), "--id", "--help")).isOne();
+        assertThat(err.toString(UTF_8)).contains("Invalid profile ID").doesNotContain("Usage:");
+        assertThat(out.size()).isZero();
+        assertThat(output).doesNotExist();
+    }
+
+    @Test
     void helpAndUsageErrorsPrecedeProfileLookup() {
         assertThat(run("profile", "preview", "--help")).isZero();
         assertThat(out.toString(UTF_8)).contains("preview", "validate", "--format");
