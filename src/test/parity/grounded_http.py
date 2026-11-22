@@ -174,23 +174,57 @@ async def raw_round_trip(endpoint, token):
             require("mcp-session-id" not in response.headers, "tools/list: session ID issued")
             return response.status_code
 
-        initialize = {"jsonrpc": "2.0", "id": "legacy-1", "method": "initialize", "params": {
-            "protocolVersion": LEGACY, "capabilities": {}, "clientInfo": {"name": "parity", "version": "1"},
-        }}
+        async def initialize_legacy(accept="application/json"):
+            """Check that a legacy client can still initialize without a session ID."""
+            initialize = {"jsonrpc": "2.0", "id": "legacy-1", "method": "initialize", "params": {
+                "protocolVersion": LEGACY, "capabilities": {}, "clientInfo": {"name": "parity", "version": "1"},
+            }}
+            response = await http.post(endpoint, headers={"Authorization": f"Bearer {token}", "Accept": accept},
+                                       json=initialize)
+            require(response.status_code == 200 and "mcp-session-id" not in response.headers,
+                    f"legacy initialize: {accept} failed to create a sessionless response")
+            frame = response.json()
+            require(frame["id"] == "legacy-1" and frame["result"]["protocolVersion"] == LEGACY,
+                    "legacy initialize: wrong ID or protocol")
+            return response.status_code
+
         observed["accept"] = {}
         for accept in (
             "application/json", "*/*", "application/*", "application/json, text/event-stream",
             "application/json;q=0", "application/json;q=0, */*;q=1", "*/*;q=1, application/*;q=0",
             "application/*;q=0", "ApPlIcAtIoN/JsOn; profile=public",
         ):
-            legacy = await http.post(endpoint, headers={"Authorization": f"Bearer {token}", "Accept": accept},
-                                     json=initialize)
-            require(legacy.status_code == 200 and "mcp-session-id" not in legacy.headers,
-                    f"legacy initialize: {accept} failed to create a sessionless response")
-            frame = legacy.json()
-            require(frame["id"] == "legacy-1" and frame["result"]["protocolVersion"] == LEGACY,
-                    "legacy initialize: wrong ID or protocol")
-            observed["accept"][accept] = {"legacy": legacy.status_code, "modern": await recovered(accept)}
+            observed["accept"][accept] = {"legacy": await initialize_legacy(accept), "modern": await recovered(accept)}
+
+        posted = [
+            ("legacy object result", LEGACY, "reply", {"result": {"value": None}}, 202, None),
+            ("legacy null result", LEGACY, "reply", {"result": None}, 400, -32602),
+            ("legacy array result", LEGACY, "reply", {"result": []}, 400, -32602),
+            ("legacy scalar result", LEGACY, "reply", {"result": 7}, 400, -32602),
+            ("legacy error with null id", LEGACY, None, {"error": {"code": -32602, "message": "Invalid params"}},
+             202, None),
+            ("legacy error missing code", LEGACY, None, {"error": {"message": "Invalid params"}}, 400, -32602),
+            ("modern posted response", MODERN, "reply", {"result": {"value": None}}, 400, -32600),
+        ]
+        observed["postedResponses"] = {}
+        for label, version, reply_id, payload, status, code in posted:
+            response = await http.post(endpoint, headers={"Authorization": f"Bearer {token}",
+                "MCP-Protocol-Version": version, "Accept": "application/json"},
+                json={"jsonrpc": "2.0", "id": reply_id, **payload})
+            require(response.status_code == status, f"{label}: expected HTTP {status}, got {response.status_code}")
+            observed["postedResponses"][label] = {"status": response.status_code}
+            if code is None:
+                require(response.content == b"", f"{label}: expected an empty acknowledgment")
+            else:
+                frame = response.json()
+                require(frame["jsonrpc"] == "2.0" and frame["id"] is None and frame["error"]["code"] == code,
+                        f"{label}: invalid error envelope")
+                observed["postedResponses"][label]["code"] = frame["error"]["code"]
+            if version == LEGACY:
+                await initialize_legacy()
+            else:
+                await recovered()
+
         trusted = {"Host": "parity.invalid", "Origin": "https://parity.invalid"}
         await recovered(headers=trusted)
         observed["publicOrigin"] = 200

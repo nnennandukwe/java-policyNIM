@@ -97,7 +97,8 @@ final class GroundedHttpServlet extends HttpServlet {
             return;
         }
         if (!message.validRequest()) {
-            if (!isModern && message.response() && message.id() != null && "2.0".equals(message.version())) {
+            if (!isModern && message.validResponse()) {
+                response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setStatus(202);
                 return;
             }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletInputStream;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,8 +15,10 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.regex.Pattern;
 
 final class GroundedHttpRequest extends HttpServletRequestWrapper {
+    private static final Pattern INTEGER_CODE = Pattern.compile("(?U)\\s*[+-]?[0-9]+(?:_[0-9]+)*+(?:\\.0+)?\\s*");
     private final byte[] body;
 
     GroundedHttpRequest(HttpServletRequest original, byte[] body) {
@@ -57,10 +60,22 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         };
     }
 
-    record Envelope(String version, JsonNode id, String method, boolean validParams, boolean response, JsonNode metadata) {
+    record Envelope(String version, JsonNode id, String method, boolean validParams, boolean objectResult,
+        boolean validError, JsonNode metadata) {
         boolean validRequest() {
             return "2.0".equals(version) && method != null && validParams
-                && (id == null || id.isTextual() || id.isIntegralNumber());
+                && (id == null || validId());
+        }
+
+        boolean validResponse() {
+            if (!"2.0".equals(version) || id == null) {
+                return false;
+            }
+            return id.isNull() ? validError : validId() && (objectResult || validError);
+        }
+
+        private boolean validId() {
+            return id.isTextual() || id.isIntegralNumber();
         }
     }
 
@@ -69,7 +84,8 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         String version = null;
         JsonNode id = null;
         String method = null;
-        boolean response = false;
+        boolean objectResult = false;
+        boolean validError = false;
         boolean validParams = true;
         JsonNode metadata = null;
         try (var parser = json.createParser(body)) {
@@ -82,10 +98,11 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                     String field = parser.currentName();
                     JsonToken value = parser.nextToken();
                     switch (field) {
-                        case "id" -> id = value.isScalarValue() ? json.readTree(parser) : json.nullNode();
+                        case "id" -> id = value.isScalarValue() ? json.readTree(parser) : MissingNode.getInstance();
                         case "jsonrpc" -> version = value == JsonToken.VALUE_STRING ? parser.getText() : null;
                         case "method" -> method = value == JsonToken.VALUE_STRING ? parser.getText() : null;
-                        case "result", "error" -> response |= value == JsonToken.START_OBJECT;
+                        case "result" -> objectResult = value == JsonToken.START_OBJECT;
+                        case "error" -> validError = validError(parser, value);
                         case "params" -> {
                             validParams = value == JsonToken.START_OBJECT || value == JsonToken.VALUE_NULL;
                             metadata = metadata(parser, value, json);
@@ -102,7 +119,40 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                 throw new IOException("Expected a single JSON value");
             }
         }
-        return new Envelope(version, id, method, validParams, response, metadata);
+        return new Envelope(version, id, method, validParams, objectResult, validError, metadata);
+    }
+
+    private static boolean validError(JsonParser parser, JsonToken value) throws IOException {
+        if (value != JsonToken.START_OBJECT) {
+            return false;
+        }
+        boolean hasCode = false;
+        boolean hasMessage = false;
+        while (parser.nextToken() == JsonToken.FIELD_NAME) {
+            String field = parser.currentName();
+            JsonToken token = parser.nextToken();
+            if ("code".equals(field)) {
+                hasCode = integerCode(parser, token);
+            }
+            else if ("message".equals(field)) {
+                hasMessage = token == JsonToken.VALUE_STRING;
+            }
+            parser.skipChildren();
+        }
+        return hasCode && hasMessage;
+    }
+
+    // The reference SDK's ErrorData accepts values its integer field can convert without a fractional part.
+    private static boolean integerCode(JsonParser parser, JsonToken token) throws IOException {
+        return switch (token) {
+            case VALUE_NUMBER_INT, VALUE_TRUE, VALUE_FALSE -> true;
+            case VALUE_STRING -> INTEGER_CODE.matcher(parser.getText()).matches();
+            case VALUE_NUMBER_FLOAT -> {
+                double number = parser.getDoubleValue();
+                yield number > Long.MIN_VALUE && number < Long.MAX_VALUE && number == Math.rint(number);
+            }
+            default -> false;
+        };
     }
 
     private static JsonNode metadata(JsonParser parser, JsonToken value, ObjectMapper json) throws IOException {
