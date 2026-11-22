@@ -89,7 +89,26 @@ def exercise_selection(cli, fixture):
                 f"{cli.product} {args}: missing text details {details!r}")
     note.write_bytes(b"updated notice\xfe")
     match(cli.json("list"), expected, f"{cli.product} changed notice")
-    return result | {"sourceDigest": revision, "targetDigest": entry["target_digest"]}
+    markdown_directory = cli.root / "draft.md"
+    markdown_directory.mkdir()
+    with_directory = expected | {"unlisted_markdown": ["README.md", "draft.md"]}
+    match(cli.json("list"), with_directory, f"{cli.product} unselected directory name")
+    match(cli.json("validate")["unlisted_markdown"], with_directory["unlisted_markdown"], "Validation listing")
+    markdown_directory.rmdir()
+
+    selected = cli.root / "policy.md"
+    selected.write_bytes(member.replace(b"policy_id:", b"unlisted_field: SYNTHETIC-SOURCE-VALUE\npolicy_id:", 1))
+    response = cli.run("list", "--format", "json")
+    require(response.returncode == 1 and not response.stderr, f"{cli.product} strict metadata diagnostics")
+    require(b"SYNTHETIC-SOURCE-VALUE" not in response.stdout, f"{cli.product} exposed a rejected field value")
+    error = json.loads(response.stdout)
+    require("unsupported frontmatter keys: unlisted_field" in error["message"], "Missing local source field name")
+    match(error, {"status": "error", "scope": "source", "generation_id": None, "message": error["message"]},
+          f"{cli.product} unsupported field envelope")
+    selected.write_bytes(member)
+    match(cli.json("list"), expected, f"{cli.product} corrected metadata")
+    return result | {"sourceDigest": revision, "targetDigest": entry["target_digest"],
+                     "unlistedDirectory": with_directory["unlisted_markdown"], "unsupportedField": "unlisted_field"}
 
 
 def check_recovery(cli, fixture):
