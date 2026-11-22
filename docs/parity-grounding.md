@@ -56,6 +56,8 @@ The packaged stdio launch portion of G01 passed at merge `ea95f7c853feba21615b2d
 
 At the pinned Python revision, a fresh test environment installed from the lockfile passed 171 tests across `test_mcp_protocol`, `test_grounded_mcp`, `test_extractive_guidance`, `test_grounded_generation_schema`, `test_preflight_guidance_integrity`, `test_compiler_service`, and `test_policy_evidence_trace_service`. The protocol suite opens real stdio subprocesses and loopback HTTP listeners with offline service fixtures.
 
+With the HTTP protocol explicitly set to `SSE`, the Java starting jar also served its two tools to a bearer-authenticated client through the `/sse` endpoint event and `/mcp/message`. With `STATELESS`, it initialized on `/mcp` without a session ID and listed zero tools. These Java compatibility cases accompany the Python transport checks. [Negotiation Build Plan](build-plans/mcp-negotiation.md)
+
 A clean Java archive built with `POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package`. Python MCP SDK 2.2.0 connected to that jar over loopback HTTP with Java's default noop storage. Both auto and forced legacy negotiated `2025-06-18` and listed only `policy_search` and `policy_preflight`. Both tools omitted output schemas and annotations. This establishes discovery at the Java starting revision. The G01–G04 proof still requires working canonical calls.
 
 On the same jar, the supported `--policynim.mcp.transport=stdio` setting accepted a newline-delimited legacy `initialize` request for `2025-11-25` and replied with `2024-11-05`. Its stdout emitted 27 nonempty non-JSON lines and six blank lines before that reply in this run. A strict line-oriented client needs a clean protocol stream.

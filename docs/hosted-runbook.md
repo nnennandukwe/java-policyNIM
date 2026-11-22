@@ -21,7 +21,7 @@ Run the same package smoke used by CI:
 POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
 jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
 POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress \
-  -Dit.test=PackagedStdioIT,PackagedHttpIT failsafe:integration-test failsafe:verify
+  -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT failsafe:integration-test failsafe:verify
 ```
 
 ## Container Build
