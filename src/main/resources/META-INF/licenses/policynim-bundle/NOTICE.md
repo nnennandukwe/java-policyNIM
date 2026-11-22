@@ -1,0 +1,5 @@
+# PolicyNIM policy and evaluation sources
+
+This jar includes the policy sources, pack manifests, profile and evaluation fixtures from Python PolicyNIM 0.3.0 at revision `fcc5322a6672b0275dcc6e0c299e631df8e8de19`. It preserves the upstream files under `io/policynim/bundled/policies/` and `io/policynim/bundled/evals/`. [Upstream policies](https://github.com/nnennandukwe/policyNIM/tree/fcc5322a6672b0275dcc6e0c299e631df8e8de19/policies) · [Evaluation fixtures](https://github.com/nnennandukwe/policyNIM/tree/fcc5322a6672b0275dcc6e0c299e631df8e8de19/evals)
+
+The accompanying `LICENSE` contains the PolicyNIM project's MIT license and copyright notice. The policy pack manifests identify upstream sources, attribution, reuse terms and changes. The `licenses/` directories inside the policy tree retain the engineering, MCP and OWASP notices and the CC BY-SA 4.0 license text supplied with the applicable policies. [Upstream project license](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/LICENSE) · [Source notices](https://github.com/nnennandukwe/policyNIM/tree/fcc5322a6672b0275dcc6e0c299e631df8e8de19/policies/licenses)
