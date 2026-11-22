@@ -46,7 +46,7 @@ public final class SourceCatalog {
         });
         if (entries.isEmpty()) {
             throw new InvalidPolicyDocumentException("The source catalog has no policies. "
-                + "Check POLICYNIM_CORPUS_DIR or pack.toml membership.");
+                + "Check that the directory passed to --corpus-root contains .md policy files.");
         }
         return new SourceCatalog(entries);
     }
@@ -73,7 +73,7 @@ public final class SourceCatalog {
         ObjectNode entry = entries.get(policyId);
         if (entry == null) {
             throw new InvalidPolicyDocumentException("Policy ID " + quotedId(policyId)
-                + " isn't in the source catalog. Run `policynim policies list --source`.");
+                + " isn't in the source catalog. Run `java -jar <jar> policies list --source --corpus-root=<path>`.");
         }
         return sourceScope(entry.deepCopy());
     }

@@ -52,7 +52,7 @@ class SourceCatalogTests {
     @Test
     void hashesTheOriginalBomAndCrlfFromTheFileUsedForNormalizedBody() throws Exception {
         Path root = Files.createDirectory(temporary.resolve("policies"));
-        String source = "---\npolicy_id: BOM-01\ntitle: Résumé\n---\n# Review\nRead the log.\n";
+        String source = "---\npolicy_id: BOM-01\ntitle: R\u00e9sum\u00e9\n---\n# Review\nRead the log.\n";
         Files.writeString(root.resolve("source.md"), "\ufeff" + source.replace("\n", "\r\n"));
 
         SourceCatalog catalog = SourceCatalog.read(root);
@@ -69,15 +69,15 @@ class SourceCatalogTests {
     @Test
     void hashesRawSupplementaryCharactersLowercaseControlEscapesAndCodePointSortedEntries() throws Exception {
         Path root = Files.createDirectory(temporary.resolve("policies"));
-        String source = "---\npolicy_id: %s\ntitle: Résumé\ndomain: ops\n---\n"
-            + "# Review\nKeep \u001b, quotes \" and slash /, backslash \\ and 😀.\n";
-        Files.writeString(root.resolve("first.md"), source.formatted("𐀀"));
+        String source = "---\npolicy_id: %s\ntitle: R\u00e9sum\u00e9\ndomain: ops\n---\n"
+            + "# Review\nKeep \u001b, quotes \" and slash /, backslash \\ and \ud83d\ude00.\n";
+        Files.writeString(root.resolve("first.md"), source.formatted("\ud800\udc00"));
         Files.writeString(root.resolve("second.md"), source.formatted("\ue000"));
 
         SourceCatalog catalog = SourceCatalog.read(root);
         ObjectNode list = catalog.list();
         assertThat(list.at("/policies/0/policy/policy_id").textValue()).isEqualTo("\ue000");
-        assertThat(list.at("/policies/1/policy/policy_id").textValue()).isEqualTo("𐀀");
+        assertThat(list.at("/policies/1/policy/policy_id").textValue()).isEqualTo("\ud800\udc00");
         assertThat(list.at("/policies/0/target_digest").textValue())
             .isEqualTo("sha256:281e9501663925aa6860fc84cd24819b01334d716e1465f80d13d7394d7fe1d6");
         assertThat(list.at("/policies/1/target_digest").textValue())
@@ -148,7 +148,8 @@ class SourceCatalogTests {
     @Test
     void refusesUnsupportedSelectionsAndKeepsCapturedEntriesPrivate() throws Exception {
         Path root = Files.createDirectory(temporary.resolve("policies"));
-        assertThatThrownBy(() -> SourceCatalog.read(root)).hasMessageContaining("no policies");
+        assertThatThrownBy(() -> SourceCatalog.read(root)).hasMessage(
+            "The source catalog has no policies. Check that the directory passed to --corpus-root contains .md policy files.");
         Files.writeString(root.resolve("a.md"), "---\npolicy_id: Mixed\n---\n# A\n");
         Path manifest = Files.createSymbolicLink(root.resolve("pack.toml"), Path.of("missing"));
         assertThatThrownBy(() -> SourceCatalog.read(root)).hasMessageContaining("pack.toml");
@@ -156,7 +157,7 @@ class SourceCatalogTests {
 
         SourceCatalog catalog = SourceCatalog.read(root);
         assertThatThrownBy(() -> catalog.show("mixed")).hasMessage(
-            "Policy ID 'mixed' isn't in the source catalog. Run `policynim policies list --source`.");
+            "Policy ID 'mixed' isn't in the source catalog. Run `java -jar <jar> policies list --source --corpus-root=<path>`.");
         catalog.show("Mixed").withObject("/policy").put("title", "Changed by caller");
         ((ObjectNode) catalog.list().at("/policies/0")).put("body", "Changed by caller");
         Files.delete(root.resolve("a.md"));

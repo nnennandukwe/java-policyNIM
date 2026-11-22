@@ -13,7 +13,9 @@ import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @SpringBootApplication(exclude = {
@@ -27,7 +29,10 @@ public class PolicyNimApplication {
 
     public static void main(String[] args) {
         if (args.length > 0 && "policies".equals(args[0])) {
-            int status = SourceCatalogCommand.run(args, System.out, System.err);
+            // Policy text and JSON use UTF-8 even when the launch locale sets stdout to ASCII.
+            var output = new PrintStream(System.out, true, StandardCharsets.UTF_8);
+            var errors = new PrintStream(System.err, true, StandardCharsets.UTF_8);
+            int status = SourceCatalogCommand.run(args, output, errors);
             if (status != 0) {
                 System.exit(status);
             }

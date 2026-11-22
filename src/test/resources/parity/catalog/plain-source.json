@@ -1,6 +1,6 @@
 {
   "files": {
-    "teams/eu/review/nested/notes.md": "﻿---\r\npolicy_id: OPS-É\r\ndomain: review\r\ntags: [prüfen, \"phase 2\"]\r\ngrounded_in: [fixture]\r\n---\r\nCafé 東京\r\n=======\r\nUse \"confirm\" at C:\\stage.\r\n",
+    "teams/eu/review/nested/notes.md": "\ufeff---\r\npolicy_id: OPS-\u00c9\r\ndomain: review\r\ntags: [pr\u00fcfen, \"phase 2\"]\r\ngrounded_in: [fixture]\r\n---\r\nCaf\u00e9 \u6771\u4eac\r\n=======\r\nUse \"confirm\" at C:\\stage.\r\n",
     "TEMPLATE.md": "---\nunfinished template\n",
     "api/tasks.md": "# Tasks\n"
   },
@@ -49,12 +49,12 @@
         "replacement_id": null,
         "path": "teams/eu/review/nested/notes.md",
         "policy": {
-          "policy_id": "OPS-É",
-          "title": "Café 東京",
+          "policy_id": "OPS-\u00c9",
+          "title": "Caf\u00e9 \u6771\u4eac",
           "doc_type": "guidance",
           "domain": "review",
           "tags": [
-            "prüfen",
+            "pr\u00fcfen",
             "phase 2"
           ],
           "grounded_in": [
@@ -70,7 +70,7 @@
             "sources": []
           }
         },
-        "body": "Café 東京\n=======\nUse \"confirm\" at C:\\stage.\n"
+        "body": "Caf\u00e9 \u6771\u4eac\n=======\nUse \"confirm\" at C:\\stage.\n"
       }
     ]
   },

@@ -49,7 +49,7 @@ class PackagedSourceCatalogIT {
             JsonNode rich = expected.required("policies").get(1);
             ObjectNode shown = rich.deepCopy();
             shown.put("scope", "source").putNull("generation_id");
-            assertEquals(shown, cli.run("policies", "show", "OPS-É", "--source", selector, "--format", "json").json(0));
+            assertEquals(shown, cli.run("policies", "show", "OPS-\u00c9", "--source", selector, "--format", "json").json(0));
 
             Files.writeString(simple, "# Tasks\r\n", UTF_8);
             var changed = cli.run("policies", "list", "--source", selector, "--format", "json").json(0);
@@ -66,6 +66,31 @@ class PackagedSourceCatalogIT {
                     throw new AssertionError("Source inspection opened a database connection.");
                 }
             });
+        }
+    }
+
+    @Test
+    void alternateRootKeepsItsInferredIdAndUtf8OutputInTheCLocale(@TempDir Path directory) throws Exception {
+        Path root = directory.resolve("guidelines");
+        String title = "Caf\u00e9 \u6771\u4eac";
+        String body = "# " + title + "\n";
+        put(root, "api/tasks.md", body);
+        try (var occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            var cli = new CatalogJar(directory, occupied.getLocalPort());
+            String selector = "--corpus-root=" + root;
+            String id = "GUIDELINES-API-TASKS";
+            var locale = Map.of("LC_ALL", "C");
+            var plain = cli.run(locale, "policies", "show", id, "--source", selector);
+            assertEquals(0, plain.exit());
+            assertTrue(plain.stderr().isEmpty());
+            assertTrue(plain.stdout().contains(body));
+            var response = cli.run(locale, "policies", "show", id, "--source", selector, "--format", "json");
+            assertTrue(response.stdout().contains(title));
+            var shown = response.json(0);
+            assertEquals(id, shown.required("policy").required("policy_id").textValue());
+            assertEquals("general", shown.required("policy").required("domain").textValue());
+            assertEquals("api/tasks.md", shown.required("path").textValue());
+            assertEquals(body, shown.required("body").textValue());
         }
     }
 
@@ -126,6 +151,10 @@ class PackagedSourceCatalogIT {
     private record CatalogJar(Path directory, int port) {
 
         Reply run(String... arguments) throws Exception {
+            return run(Map.of(), arguments);
+        }
+
+        Reply run(Map<String, String> overrides, String... arguments) throws Exception {
             Path home = Files.createDirectories(directory.resolve("home"));
             Path cwd = Files.createDirectories(directory.resolve("work"));
             var env = Map.of(
@@ -136,7 +165,9 @@ class PackagedSourceCatalogIT {
                 "SERVER_ADDRESS", "127.0.0.1", "SERVER_PORT", Integer.toString(port));
             Path stdout = cwd.resolve("stdout");
             Path stderr = cwd.resolve("stderr");
-            var child = PackagedMcpHttp.jarCommand(home, env, arguments).directory(cwd.toFile())
+            var launch = PackagedMcpHttp.jarCommand(home, env, arguments);
+            launch.environment().putAll(overrides);
+            var child = launch.directory(cwd.toFile())
                 .redirectErrorStream(false).redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
             try {
                 assertTrue(child.waitFor(15, TimeUnit.SECONDS), "The catalog command didn't exit within 15 seconds.");

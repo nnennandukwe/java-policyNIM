@@ -9,7 +9,7 @@ import socket
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 
@@ -87,9 +87,9 @@ def check_text_and_help(cli, catalog):
     """Check human-readable default output plus the public help for all three commands."""
     rich = catalog["policies"][1]
     for args, fragments in (
-        (["list"], [catalog["digest"], "API-TASKS", "OPS-É"]),
+        (["list"], [catalog["digest"], "API-TASKS", "OPS-\u00c9"]),
         (["validate"], [catalog["digest"], "2"]),
-        (["show", "OPS-É"], [rich["path"], rich["policy"]["provenance"]["content_digest"], rich["body"].strip()]),
+        (["show", "OPS-\u00c9"], [rich["path"], rich["policy"]["provenance"]["content_digest"], rich["body"].strip()]),
     ):
         result = cli.run(*args)
         require(result.returncode == 0 and all(value in result.stdout.decode("utf-8") for value in fragments),
@@ -127,7 +127,7 @@ def check_recovery(cli, fixture):
     linked_dir = cli.root / "linked-api"
     linked_dir.symlink_to("api", target_is_directory=True)
     listed = cli.json("list")
-    require([entry["policy"]["policy_id"] for entry in listed["policies"]] == ["API-ALIAS", "API-TASKS", "OPS-É"],
+    require([entry["policy"]["policy_id"] for entry in listed["policies"]] == ["API-ALIAS", "API-TASKS", "OPS-\u00c9"],
             f"{cli.product}: unexpected membership for a file and directory link")
     alias_entry = listed["policies"][0]
     original = fixture["catalog"]["policies"][0]
@@ -153,6 +153,28 @@ def check_recovery(cli, fixture):
     match(restored, validation(fixture["catalog"]), f"{cli.product} restored LF source")
     return {"sourceErrors": failures, "aliasPath": alias_entry["path"],
             "crlfCatalogDigest": updated["digest"], "recoveredDigest": restored["catalog_digest"]}
+
+
+def check_alternate_root_in_c_locale(cli):
+    """Read a UTF-8 title under an alternate root using ASCII arguments and the C locale."""
+    root = cli.root.with_name("guidelines")
+    title = "Caf\u00e9 \u6771\u4eac"
+    body = f"# {title}\n"
+    write_fixture(root, {"api/tasks.md": body})
+    env = cli.env | {"LC_ALL": "C"}
+    if cli.product == "python":
+        env["POLICYNIM_CORPUS_DIR"] = str(root)
+    selected = replace(cli, root=root, env=env)
+    policy_id = "GUIDELINES-API-TASKS"
+    for extra in ([], ["--format", "json"]):
+        result = selected.run("show", policy_id, *extra)
+        require(result.returncode == 0 and not result.stderr, f"{cli.product}: C-locale show failed")
+        require(title.encode("utf-8") in result.stdout, f"{cli.product}: C-locale output lost the UTF-8 title")
+        if extra:
+            shown = json.loads(result.stdout)
+            match([shown["policy"]["policy_id"], shown["policy"]["domain"], shown["path"], shown["body"]],
+                  [policy_id, "general", "api/tasks.md", body], f"{cli.product} alternate root")
+    return {"policyId": policy_id, "domain": "general", "utf8Title": title}
 
 
 def exercise(cli, fixture):
@@ -183,7 +205,7 @@ def exercise(cli, fixture):
             f"{cli.product}: source files changed during inspection")
     return {"scope": listed["scope"], "catalogDigest": listed["digest"],
             "policyIds": [p["policy"]["policy_id"] for p in listed["policies"]],
-            "rootErrors": root_errors, "recovery": recovery}
+            "rootErrors": root_errors, "recovery": recovery, "alternateRootCLocale": check_alternate_root_in_c_locale(cli)}
 
 
 def main():
