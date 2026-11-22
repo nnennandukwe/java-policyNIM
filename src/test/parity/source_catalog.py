@@ -18,6 +18,9 @@ from legacy_stdio import require
 
 FIXTURE = Path(__file__).resolve().parents[1] / "resources" / "parity" / "catalog" / "plain-source.json"
 
+# non-English test data
+UNICODE_POLICY_ID = "OPS-\u00c9"
+
 
 def sha256(data):
     """Hash the original file bytes using the public content revision format."""
@@ -96,9 +99,9 @@ def check_text_and_help(cli, catalog):
     """Check human-readable default output plus the public help for all three commands."""
     rich = catalog["policies"][1]
     for args, fragments in (
-        (["list"], [catalog["digest"], "API-TASKS", "OPS-\u00c9"]),
+        (["list"], [catalog["digest"], "API-TASKS", UNICODE_POLICY_ID]),
         (["validate"], [catalog["digest"], "2"]),
-        (["show", "OPS-\u00c9"], [rich["path"], rich["policy"]["provenance"]["content_digest"], rich["body"].strip()]),
+        (["show", UNICODE_POLICY_ID], [rich["path"], rich["policy"]["provenance"]["content_digest"], rich["body"].strip()]),
     ):
         result = cli.run(*args)
         require(result.returncode == 0 and all(value in result.stdout.decode("utf-8") for value in fragments),
@@ -140,7 +143,7 @@ def check_recovery(cli, fixture):
     linked_dir = cli.root / "linked-api"
     linked_dir.symlink_to("api", target_is_directory=True)
     listed = cli.json("list")
-    require([entry["policy"]["policy_id"] for entry in listed["policies"]] == ["API-ALIAS", "API-TASKS", "OPS-\u00c9"],
+    require([entry["policy"]["policy_id"] for entry in listed["policies"]] == ["API-ALIAS", "API-TASKS", UNICODE_POLICY_ID],
             f"{cli.product}: unexpected membership for a file and directory link")
     alias_entry = listed["policies"][0]
     original = fixture["catalog"]["policies"][0]
@@ -171,6 +174,7 @@ def check_recovery(cli, fixture):
 def check_alternate_root_in_c_locale(cli):
     """Read a UTF-8 title under an alternate root using ASCII arguments and the C locale."""
     root = cli.root.with_name("guidelines")
+    # non-English test data
     title = "Caf\u00e9 \u6771\u4eac"
     body = f"# {title}\n"
     write_fixture(root, {"api/tasks.md": body})

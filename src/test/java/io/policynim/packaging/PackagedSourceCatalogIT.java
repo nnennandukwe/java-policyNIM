@@ -49,6 +49,7 @@ class PackagedSourceCatalogIT {
             JsonNode rich = expected.required("policies").get(1);
             ObjectNode shown = rich.deepCopy();
             shown.put("scope", "source").putNull("generation_id");
+            // # non-English test data
             assertEquals(shown, cli.run("policies", "show", "OPS-\u00c9", "--source", selector, "--format", "json").json(0));
 
             Files.writeString(simple, "# Tasks\r\n", UTF_8);
@@ -72,6 +73,7 @@ class PackagedSourceCatalogIT {
     @Test
     void alternateRootKeepsItsInferredIdAndUtf8OutputInTheCLocale(@TempDir Path directory) throws Exception {
         Path root = directory.resolve("guidelines");
+        // # non-English test data
         String title = "Caf\u00e9 \u6771\u4eac";
         String body = "# " + title + "\n";
         put(root, "api/tasks.md", body);

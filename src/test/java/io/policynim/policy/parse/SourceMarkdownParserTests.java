@@ -13,11 +13,13 @@ class SourceMarkdownParserTests {
     @Test
     void preservesTheUnfrontedBodyAndInfersTheWholeUnicodePath() {
         String body = "\r\n> ## early\r\n\r\n> One *literal*\r\n>   second\r\n> ======\r\n";
+        // # non-English test data
         var parsed = parser.parse("policies/team/ops/deep/caf\u00e9.md", "\ufeff\ufeff" + body);
         assertThat(parsed.body()).isEqualTo(body);
         assertThat(parsed.bodyStartLine()).isEqualTo(1);
         assertThat(parsed.metadata().title()).isEqualTo("One *literal*\n  second");
         assertThat(parsed.metadata().domain()).isEqualTo("team");
+        // # non-English test data
         assertThat(parsed.metadata().policyId()).isEqualTo("TEAM-OPS-DEEP-CAF\u00c9");
     }
 
@@ -132,6 +134,7 @@ class SourceMarkdownParserTests {
         assertThat(setext.metadata().title()).isEqualTo("first *lit*\n  second");
         var atx = parser.parse("policies/blank.md", "> - # [link](url) \\* &amp; `code` ###\n");
         assertThat(atx.metadata().title()).isEqualTo("[link](url) \\* &amp; `code`");
+        // # non-English test data
         var fallback = parser.parse("docs/deep/\u00dfeta_name's.md", "~~~\n# ignored\n~~~\n");
         assertThat(fallback.metadata().title()).isEqualTo("Sseta Name'S");
         assertThat(fallback.metadata().policyId()).isEqualTo("DOCS-DEEP-SSETA-NAME-S");

@@ -119,7 +119,7 @@ Set `python` to the interpreter from a disposable install of Python PolicyNIM at
 "$python" src/test/parity/source_catalog.py --jar target/policynim.jar
 ```
 
-The paired check validates both command outputs against the committed fixture and records the jar and input checksums. It checks UTF-8 source text, error status and output channels, retries, and read-only behavior from isolated working directories.
+The JSON under `src/test/resources/parity/catalog/plain-source.json` holds non-English test data for exact UTF-8 round trips. Its Unicode policy ID, tags, title and body are the expected source bytes for both products. The paired check validates both command outputs against the committed fixture and records the jar and input checksums. It checks UTF-8 source text, error status and output channels, retries, and read-only behavior from isolated working directories.
 
 ## Definition Of Done
 

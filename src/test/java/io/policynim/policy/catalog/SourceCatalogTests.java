@@ -52,7 +52,9 @@ class SourceCatalogTests {
     @Test
     void hashesTheOriginalBomAndCrlfFromTheFileUsedForNormalizedBody() throws Exception {
         Path root = Files.createDirectory(temporary.resolve("policies"));
+        // # non-English test data
         String source = "---\npolicy_id: BOM-01\ntitle: R\u00e9sum\u00e9\n---\n# Review\nRead the log.\n";
+        // # non-English test data
         Files.writeString(root.resolve("source.md"), "\ufeff" + source.replace("\n", "\r\n"));
 
         SourceCatalog catalog = SourceCatalog.read(root);
@@ -69,15 +71,20 @@ class SourceCatalogTests {
     @Test
     void hashesRawSupplementaryCharactersLowercaseControlEscapesAndCodePointSortedEntries() throws Exception {
         Path root = Files.createDirectory(temporary.resolve("policies"));
+        // # non-English test data
         String source = "---\npolicy_id: %s\ntitle: R\u00e9sum\u00e9\ndomain: ops\n---\n"
             + "# Review\nKeep \u001b, quotes \" and slash /, backslash \\ and \ud83d\ude00.\n";
-        Files.writeString(root.resolve("first.md"), source.formatted("\ud800\udc00"));
-        Files.writeString(root.resolve("second.md"), source.formatted("\ue000"));
+        // # non-English test data
+        String supplementaryId = "\ud800\udc00";
+        // # non-English test data
+        String privateUseId = "\ue000";
+        Files.writeString(root.resolve("first.md"), source.formatted(supplementaryId));
+        Files.writeString(root.resolve("second.md"), source.formatted(privateUseId));
 
         SourceCatalog catalog = SourceCatalog.read(root);
         ObjectNode list = catalog.list();
-        assertThat(list.at("/policies/0/policy/policy_id").textValue()).isEqualTo("\ue000");
-        assertThat(list.at("/policies/1/policy/policy_id").textValue()).isEqualTo("\ud800\udc00");
+        assertThat(list.at("/policies/0/policy/policy_id").textValue()).isEqualTo(privateUseId);
+        assertThat(list.at("/policies/1/policy/policy_id").textValue()).isEqualTo(supplementaryId);
         assertThat(list.at("/policies/0/target_digest").textValue())
             .isEqualTo("sha256:281e9501663925aa6860fc84cd24819b01334d716e1465f80d13d7394d7fe1d6");
         assertThat(list.at("/policies/1/target_digest").textValue())
