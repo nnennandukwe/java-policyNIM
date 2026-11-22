@@ -3,7 +3,16 @@ package io.policynim.mcp.tool;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.modelcontextprotocol.modern.McpSchema.CallToolResult;
+import io.modelcontextprotocol.modern.McpSchema.TextContent;
+import io.modelcontextprotocol.modern.McpSchema.Tool;
+import io.modelcontextprotocol.modern.server.McpRequestContext;
+import io.modelcontextprotocol.modern.server.McpSyncResponse;
+import io.modelcontextprotocol.modern.server.feature.McpSyncTool;
+import io.modelcontextprotocol.modern.server.feature.McpSyncToolRepository;
+import io.modelcontextprotocol.modern.server.feature.ToolsPage;
 import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpStatelessServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,62 +28,68 @@ public class PolicyMcpToolSpecificationConfiguration {
     private static final String INTERNAL_TOOL_ERROR_MESSAGE =
         "PolicyNIM tool invocation failed. See server logs for details.";
 
-    @Bean
-    List<McpServerFeatures.SyncToolSpecification> policySyncToolSpecifications(
-        PolicyMcpTools tools,
-        ObjectMapper objectMapper
-    ) {
-        return List.of(
-            new McpServerFeatures.SyncToolSpecification(
-                tool(
-                    "policy_search",
-                    "Search the local PolicyNIM policy corpus.",
-                    "query",
-                    Map.of(
-                        "query", stringProperty("The policy search query."),
-                        "domain", stringProperty("Optional policy domain filter."),
-                        "topK", integerProperty("Maximum number of hits to return.")
-                    )
+    private final ObjectMapper objectMapper;
+    private final List<PolicyTool> definitions;
+
+    PolicyMcpToolSpecificationConfiguration(PolicyMcpTools tools, ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        this.definitions = List.of(
+            tool("policy_search", "Search the local PolicyNIM policy corpus.", "query",
+                Map.of(
+                    "query", stringProperty("The policy search query."),
+                    "domain", stringProperty("Optional policy domain filter."),
+                    "topK", integerProperty("Maximum number of hits to return.")
                 ),
-                (exchange, request) -> invokeTool(
-                    objectMapper,
-                    request,
-                    arguments -> tools.policySearch(
-                        requiredString(arguments, "query"),
-                        optionalString(arguments, "domain"),
-                        optionalInteger(arguments, "topK")
-                    )
-                )
-            ),
-            new McpServerFeatures.SyncToolSpecification(
-                tool(
-                    "policy_preflight",
-                    "Run grounded PolicyNIM preflight for a coding task.",
-                    "task",
-                    Map.of(
-                        "task", stringProperty("The coding task that needs policy guidance."),
-                        "domain", stringProperty("Optional policy domain filter."),
-                        "topK", integerProperty("Maximum number of evidence hits to use.")
-                    )
+                arguments -> tools.policySearch(requiredString(arguments, "query"),
+                    optionalString(arguments, "domain"), optionalInteger(arguments, "topK"))),
+            tool("policy_preflight", "Run grounded PolicyNIM preflight for a coding task.", "task",
+                Map.of(
+                    "task", stringProperty("The coding task that needs policy guidance."),
+                    "domain", stringProperty("Optional policy domain filter."),
+                    "topK", integerProperty("Maximum number of evidence hits to use.")
                 ),
-                (exchange, request) -> invokeTool(
-                    objectMapper,
-                    request,
-                    arguments -> tools.policyPreflight(
-                        requiredString(arguments, "task"),
-                        optionalString(arguments, "domain"),
-                        optionalInteger(arguments, "topK")
-                    )
-                )
-            )
+                arguments -> tools.policyPreflight(requiredString(arguments, "task"),
+                    optionalString(arguments, "domain"), optionalInteger(arguments, "topK")))
         );
     }
 
-    private static McpSchema.Tool tool(
+    @Bean
+    List<McpServerFeatures.SyncToolSpecification> policySyncToolSpecifications() {
+        return definitions.stream().map(tool -> new McpServerFeatures.SyncToolSpecification(tool.legacyDefinition(),
+            (exchange, request) -> invokeTool(tool, request.arguments()).legacyResult())).toList();
+    }
+
+    @Bean
+    List<McpStatelessServerFeatures.SyncToolSpecification> groundedLegacyTools() {
+        return definitions.stream().map(tool -> new McpStatelessServerFeatures.SyncToolSpecification(tool.legacyDefinition(),
+            (context, request) -> invokeTool(tool, request.arguments()).legacyResult())).toList();
+    }
+
+    @Bean
+    McpSyncToolRepository groundedModernTools() {
+        List<McpSyncTool> tools = definitions.stream().map(tool -> McpSyncTool.of(
+            Tool.builder(tool.name(), tool.inputSchema()).description(tool.description()).build(),
+            (context, request) -> McpSyncResponse.result(invokeTool(tool, request.arguments()).modernResult()))).toList();
+        ToolsPage page = ToolsPage.of(tools.stream().map(McpSyncTool::definition).toList());
+        return new McpSyncToolRepository() {
+            @Override
+            public ToolsPage list(McpRequestContext context, String cursor) {
+                return page;
+            }
+
+            @Override
+            public McpSyncTool find(McpRequestContext context, String name) {
+                return tools.stream().filter(tool -> tool.definition().name().equals(name)).findFirst().orElse(null);
+            }
+        };
+    }
+
+    private static PolicyTool tool(
         String name,
         String description,
         String requiredProperty,
-        Map<String, Object> properties
+        Map<String, Object> properties,
+        Function<Map<String, Object>, Object> invocation
     ) {
         Map<String, Object> inputSchema = Map.of(
             "type", "object",
@@ -84,7 +99,7 @@ public class PolicyMcpToolSpecificationConfiguration {
             "$defs", Map.of(),
             "definitions", Map.of()
         );
-        return McpSchema.Tool.builder(name, inputSchema).description(description).build();
+        return new PolicyTool(name, description, inputSchema, invocation);
     }
 
     private static Map<String, Object> stringProperty(String description) {
@@ -103,48 +118,49 @@ public class PolicyMcpToolSpecificationConfiguration {
         return property;
     }
 
-    private static McpSchema.CallToolResult toolResult(ObjectMapper objectMapper, Object payload) {
-        Map<String, Object> structuredContent = objectMapper.convertValue(
-            payload,
-            new TypeReference<>() {
-            }
-        );
-        try {
+    private record PolicyTool(String name, String description, Map<String, Object> inputSchema,
+        Function<Map<String, Object>, Object> invocation) {
+
+        McpSchema.Tool legacyDefinition() {
+            return McpSchema.Tool.builder(name, inputSchema).description(description).build();
+        }
+    }
+
+    private record ToolReply(Map<String, Object> structuredContent, String text, boolean isError) {
+
+        McpSchema.CallToolResult legacyResult() {
             return McpSchema.CallToolResult.builder()
                 .structuredContent(structuredContent)
-                .addTextContent(objectMapper.writeValueAsString(structuredContent))
-                .isError(false)
+                .addTextContent(text)
+                .isError(isError)
                 .build();
         }
-        catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Could not serialize MCP tool payload.", exception);
+
+        CallToolResult modernResult() {
+            return CallToolResult.builder()
+                .structuredContent(structuredContent)
+                .addContent(TextContent.builder(text).build())
+                .isError(isError)
+                .build();
+        }
+
+        static ToolReply error(String message) {
+            return new ToolReply(Map.of("error", message), message, true);
         }
     }
 
-    private static McpSchema.CallToolResult invokeTool(
-        ObjectMapper objectMapper,
-        McpSchema.CallToolRequest request,
-        Function<Map<String, Object>, Object> invocation
-    ) {
+    private ToolReply invokeTool(PolicyTool tool, Map<String, Object> arguments) {
         try {
-            Map<String, Object> arguments = request.arguments() == null ? Map.of() : request.arguments();
-            return toolResult(objectMapper, invocation.apply(arguments));
+            Object payload = tool.invocation().apply(arguments == null ? Map.of() : arguments);
+            Map<String, Object> content = objectMapper.convertValue(payload, new TypeReference<>() {});
+            return new ToolReply(content, objectMapper.writeValueAsString(content), false);
         }
         catch (McpToolInvocationException | IllegalArgumentException exception) {
-            return toolError(exception.getMessage());
+            return ToolReply.error(exception.getMessage());
         }
-        catch (RuntimeException exception) {
-            return toolError(INTERNAL_TOOL_ERROR_MESSAGE);
+        catch (JsonProcessingException | RuntimeException exception) {
+            return ToolReply.error(INTERNAL_TOOL_ERROR_MESSAGE);
         }
-    }
-
-    private static McpSchema.CallToolResult toolError(String message) {
-        Map<String, Object> structuredContent = Map.of("error", message);
-        return McpSchema.CallToolResult.builder()
-            .structuredContent(structuredContent)
-            .addTextContent(message)
-            .isError(true)
-            .build();
     }
 
     private static String requiredString(Map<String, Object> arguments, String key) {

@@ -82,7 +82,7 @@ class LegacyAlternateHttpConfiguration {
     @Bean(destroyMethod = "closeGracefully")
     @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "STATELESS")
     McpStatelessSyncServer legacyStatelessServer(ServletRegistrationBean<HttpServletStatelessServerTransport> registration,
-        LegacyMcpServerConfiguration settings, Environment environment) {
+        McpServerSettings settings) {
         // Spring AI registered the Java tools only on its stateful servers.
         var capabilities = McpSchema.ServerCapabilities.builder();
         if (settings.enabled("capabilities.tool")) {
@@ -99,7 +99,7 @@ class LegacyAlternateHttpConfiguration {
         }
         return McpServer.sync(registration.getServlet())
             .serverInfo(settings.serverInfo())
-            .instructions(environment.getProperty(PREFIX + "instructions"))
+            .instructions(settings.instructions())
             .requestTimeout(settings.requestTimeout())
             .capabilities(capabilities.build())
             .immediateExecution(true)

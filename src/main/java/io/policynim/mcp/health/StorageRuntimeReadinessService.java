@@ -14,12 +14,15 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
         + IngestCommandLine.COMMAND_EXAMPLE
         + "`) with JDBC storage configured before serving MCP traffic.";
 
-    private final PolicyNimProperties properties;
+    private final PolicyNimProperties.StorageProperties storage;
     private final PolicyChunkReadStore readStore;
+    private final String mcpUrl;
 
-    StorageRuntimeReadinessService(PolicyNimProperties properties, PolicyChunkReadStore readStore) {
-        this.properties = Objects.requireNonNull(properties, "properties must not be null");
+    StorageRuntimeReadinessService(PolicyNimProperties.StorageProperties storage, PolicyChunkReadStore readStore,
+        String mcpUrl) {
+        this.storage = Objects.requireNonNull(storage, "storage");
         this.readStore = Objects.requireNonNull(readStore, "readStore must not be null");
+        this.mcpUrl = mcpUrl;
     }
 
     @Override
@@ -33,7 +36,7 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
     }
 
     private HealthCheckResponse computeReadiness(boolean includeExactRowCount) {
-        if (properties.getStorage().getMode() != PolicyNimProperties.StorageMode.JDBC) {
+        if (storage.getMode() != PolicyNimProperties.StorageMode.JDBC) {
             return notReady(
                 0,
                 "Bootstrap mode is active. The policy index is not wired yet. Configure "
@@ -88,7 +91,7 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
             true,
             tableName(),
             rowCount,
-            properties.getMcp().mcpUrl(),
+            mcpUrl,
             "Policy chunk index is ready.",
             checks(new HealthCheckDetail("ok", "Policy chunk table is queryable."))
         );
@@ -104,7 +107,7 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
             false,
             tableName(),
             rowCount,
-            properties.getMcp().mcpUrl(),
+            mcpUrl,
             reason,
             checks(new HealthCheckDetail("error", checkReason))
         );
@@ -115,7 +118,7 @@ final class StorageRuntimeReadinessService implements RuntimeReadinessService {
     }
 
     private String tableName() {
-        return properties.getStorage().getTableName();
+        return storage.getTableName();
     }
 
     private static String capitalize(String value) {

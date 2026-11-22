@@ -42,6 +42,9 @@ public class PolicyNimProperties {
         @NotNull
         private McpTransport transport = McpTransport.STREAMABLE_HTTP;
 
+        @NotNull
+        private McpContract contract = McpContract.JAVA_V1;
+
         @NotBlank
         private String host = "127.0.0.1";
 
@@ -81,6 +84,14 @@ public class PolicyNimProperties {
 
         public void setTransport(McpTransport transport) {
             this.transport = transport;
+        }
+
+        public McpContract getContract() {
+            return contract;
+        }
+
+        public void setContract(McpContract contract) {
+            this.contract = contract;
         }
 
         public String getHost() {
@@ -124,11 +135,15 @@ public class PolicyNimProperties {
         }
 
         public String mcpUrl() {
+            return mcpUrl(streamableHttpPath);
+        }
+
+        public String mcpUrl(String endpointPath) {
             if (publicBaseUrl == null) {
                 return null;
             }
             String base = publicBaseUrl.toString().replaceAll("/+$", "");
-            return base + streamableHttpPath;
+            return base + endpointPath;
         }
 
         public AuthProperties getAuth() {

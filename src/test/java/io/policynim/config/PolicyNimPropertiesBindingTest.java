@@ -27,6 +27,7 @@ class PolicyNimPropertiesBindingTest {
             )
             .run(context -> {
                 PolicyNimProperties properties = context.getBean(PolicyNimProperties.class);
+                assertThat(properties.getMcp().getContract()).isEqualTo(McpContract.JAVA_V1);
                 assertThat(properties.getMcp().getTransport()).isEqualTo(McpTransport.STDIO);
                 assertThat(McpTransport.resolve(context.getEnvironment())).isEqualTo(McpTransport.STREAMABLE_HTTP);
                 assertThat(properties.getMcp().getHost()).isEqualTo("0.0.0.0");
@@ -38,6 +39,13 @@ class PolicyNimPropertiesBindingTest {
                 assertThat(properties.getStorage().getMode()).isEqualTo(PolicyNimProperties.StorageMode.JDBC);
                 assertThat(properties.getStorage().getTableName()).isEqualTo("bootstrap_chunks");
             });
+    }
+
+    @Test
+    void bindsTheGroundedContract() {
+        contextRunner.withPropertyValues("policynim.mcp.contract=grounded-v1").run(context ->
+            assertThat(context.getBean(PolicyNimProperties.class).getMcp().getContract())
+                .isEqualTo(McpContract.GROUNDED_V1));
     }
 
     @Test

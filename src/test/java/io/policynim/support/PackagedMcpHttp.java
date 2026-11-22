@@ -103,6 +103,17 @@ public final class PackagedMcpHttp {
             HttpResponse.BodyHandlers.ofString(UTF_8));
     }
 
+    public static HttpResponse<String> postJson(HttpClient http, URI endpoint, String body, String token,
+        Map<String, String> headers) throws Exception {
+        var request = request(endpoint).setHeader("Accept", "application/json")
+            .header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body));
+        headers.forEach(request::setHeader);
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     public static JsonNode result(HttpResponse<String> response, int id) throws IOException {
         assertEquals(200, response.statusCode());
         String body = response.body();

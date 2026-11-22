@@ -65,6 +65,20 @@ The stateless Java servlet requires both JSON and SSE in Accept, while the pinne
 
 Keep the selected protocol for the life of stdin. A subsequent modern envelope on a legacy connection yields `-32600`. A subsequent initialize on a modern connection yields `-32022` with supported/requested data where available. Java's modern SDK handles a plain legacy initialize but treats a modern-stamped initialize differently. A boundary guard should cover the missing case and leave normal protocol decoding and tool dispatch to the SDK. [Pinned Python SDK](https://pypi.org/project/mcp/2.2.0/) · [Python process checks](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/tests/test_mcp_protocol.py)
 
+Python MCP 2.2.0 checks the media range in `Accept` and discards its parameters. When JSON matches, both protocol modes return the JSON response even with `application/json;q=0` or `application/json;q=0, */*;q=1`. Preserve this observable choice in grounded HTTP. The HTTP specification permits a server to disregard an unsatisfied content negotiation field. [HTTP semantics, section 12.4.1](https://www.rfc-editor.org/rfc/rfc9110.html#section-12.4.1)
+
+The reference HTTP router advertises legacy DELETE on a HEAD refusal, although the stateless service rejects DELETE with 405. Java reports the available methods, `Allow: GET, POST`, for legacy 405 responses and `Allow: POST` for modern 405 responses. Java also bounds held legacy GET listeners at 1,024, using the locked SDK's default subscription capacity as its limit. A saturated listener pool returns 429. Disconnect, shutdown, or two consecutive missed heartbeat writes release a slot. A healthy idle stream can stay connected across heartbeat cycles. [HTTP Allow semantics](https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.1) · [SDK capacity and cleanup](https://github.com/modelcontextprotocol/python-sdk/blob/9972c21aa42054fb1450c5fc614761ed11847ec6/src/mcp/server/subscriptions.py)
+
+Grounded requests use string or integer IDs. The pinned Python legacy decoder can interpret a request with a null or fractional ID as a notification and return HTTP 202. Java rejects these malformed legacy frames with HTTP 400 and `-32602`. Both modern paths return HTTP 400 and `-32600`. The Java error text stays bounded and excludes the request payload. Compare the status, code and correlation rules for each named refusal. [Locked protocol types](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/uv.lock)
+
+A legacy client can POST a JSON-RPC response. On the pinned Python server, an object result with a string or integer ID receives HTTP 202. A null, array, or scalar result receives HTTP 400 and `-32602`. A well-formed error response can carry a null ID. The modern endpoint rejects posted responses with HTTP 400 and `-32600`. The paired HTTP check exercises these cases before the next valid request. [Python SDK wire types](https://github.com/modelcontextprotocol/python-sdk/blob/9972c21aa42054fb1450c5fc614761ed11847ec6/src/mcp-types/mcp_types/jsonrpc.py#L56-L126)
+
+JSON-RPC defines success and failure as separate response shapes. A legacy POST to Python can receive HTTP 202 when it contains both `result` and `error`, or when its error code is a numeric string or a boolean. Java rejects those frames with HTTP 400 and `-32602`. Send exactly one response member. The request fields `method` and `params` belong to a request or notification. Java refuses a frame that combines either field with a response member. In paired checks, Python acknowledged a legacy `ping` with array params and a result. With the same result and ordinary params, Python ran the ping. A fresh, well-formed ping works after either case on both servers. An error code must be an integer number. Both services accept `1`, `1.0`, and `1e0`, and reject `1.25`. The paired check records each server's observed response and sends a valid request immediately afterward. [JSON-RPC response and error definitions](https://www.jsonrpc.org/specification#response_object) · [JSON Schema integers](https://json-schema.org/draft/2020-12/json-schema-validation#section-6.1.1)
+
+Use unique member names within every JSON object. On exact request bytes, pinned Python acknowledged a repeated legacy result with HTTP 202 and returned a correlated tool list for a modern request with a repeated ID. The grounded Java parser refuses duplicate names throughout a message with HTTP 400, a null ID and `-32700`. The next request can proceed normally. [JSON object interoperability](https://www.rfc-editor.org/rfc/rfc8259.html#section-4)
+
+For a known tool with a missing required field, both installed services returned HTTP 200 with a correlated `result.isError` and a text block naming the missing field. Neither sent a JSON-RPC error for this call. Python's legacy client adds `resultType=complete` to its decoded object. Check the original response body when comparing protocol fields. Explicit null optional fields still reach different validation paths at this stage. G03 owns the grounded nullable schema and the canonical `top_k` argument. [Stateless SDK tool validation](https://github.com/modelcontextprotocol/java-sdk/blob/81aed210cea9b4d080d0300944b6ee128cf64424/mcp-core/src/main/java/io/modelcontextprotocol/util/ToolInputValidator.java)
+
 ## Failure And Recovery Rules
 
 Apply the same HTTP protection in both contract modes on the configured path and its accepted spellings. Version/header disagreement yields the applicable structured rejection. An unsupported modern version names the supported version. Rejected requests must leave the next valid call usable. Keep diagnostics on stderr and protect bearer values, request content, and upstream exception detail.
@@ -103,6 +117,17 @@ uv sync --frozen --offline --project "$reference_dir"
 The check creates a temporary home for each server, verifies its negotiated revision and installed version, calls search without a required query, and lists tools again on the same session. Java and Python each have their own expected tool names for this migration. The result includes the jar checksum. [Package checks](../hosted-runbook.md)
 
 The JDBC test uses the same Markdown file a Python operator can select with `POLICYNIM_CORPUS_DIR`. The pinned Python CLI accepted it with `policynim policies validate --source --format json` and reported one effective policy. Its source catalog digest was `sha256:8235dea85dcda12002099e86802cb31ece64c5597ae9f1ca2dc736be3d46b749`. The Java check runs jar ingest in one process and verifies the returned policy ID, path, body, and lines in another. [Shared recovery policy](../../src/test/resources/parity/policies/recovery.md)
+
+### Reproduce the paired HTTP check
+
+Use the same locked Python environment and freshly packaged jar as the stdio check. Pass the extracted Python revision so the check can import its committed public generation.
+
+```bash
+"$reference_dir/.venv/bin/python" src/test/parity/grounded_http.py \
+  --jar target/policynim.jar --reference-root "$reference_dir"
+```
+
+The check starts the installed Python command and the Java jar on loopback with temporary homes and a new test bearer token. It exercises discovery, calls before discovery, sessionless legacy requests, Host and Origin checks, protocol errors, and the next valid call. The Python reference serves its indexed generation. Java's noop store supplies its documented readiness error. The JDBC package test separately checks successful Java retrieval. Each implementation has its own expected tool list while the remaining capabilities are in development.
 
 ## Definition Of Done
 

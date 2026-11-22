@@ -141,6 +141,42 @@ class PolicyNimMcpEnvironmentPostProcessorTests {
         assertThat(environment.getProperty("logging.structured.format.console")).isEqualTo("ecs");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"future", "", " "})
+    void rejectsAnUnknownOrEmptyContractBeforeStartingTheServer(String value) {
+        var environment = new MockEnvironment().withProperty("policynim.mcp.contract", value);
+        assertThatThrownBy(() -> postProcess(environment)).hasMessageContaining("policynim.mcp.contract");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"SSE", "STATELESS", "custom"})
+    void requiresStreamableHttpForTheGroundedContract(String protocol) {
+        var environment = new MockEnvironment()
+            .withProperty("policynim.mcp.contract", "grounded-v1")
+            .withProperty("spring.ai.mcp.server.protocol", protocol);
+        assertThatThrownBy(() -> postProcess(environment)).hasMessageContaining("policynim.mcp.contract")
+            .hasMessageContaining("spring.ai.mcp.server.protocol");
+    }
+
+    @Test
+    void rejectsGroundedStdioUntilItsDispatcherShips() {
+        var environment = new MockEnvironment()
+            .withProperty("policynim.mcp.contract", "grounded-v1")
+            .withProperty("spring.ai.mcp.server.stdio", "true");
+        assertThatThrownBy(() -> postProcess(environment)).hasMessageContaining("grounded-v1")
+            .hasMessageContaining("stdio");
+    }
+
+    @Test
+    void allowsIngestWhenTheOperatorsGroundedServerUsesAnotherTransport() {
+        var environment = new MockEnvironment()
+            .withProperty("policynim.mcp.contract", "grounded-v1")
+            .withProperty("spring.ai.mcp.server.stdio", "true")
+            .withProperty("spring.ai.mcp.server.enabled", "false");
+        postProcess(environment);
+        assertThat(environment.getProperty("spring.main.web-application-type")).isNull();
+    }
+
     private static void postProcess(ConfigurableEnvironment environment) {
         new PolicyNimMcpEnvironmentPostProcessor()
             .postProcessEnvironment(environment, new SpringApplication(PolicyNimApplication.class));

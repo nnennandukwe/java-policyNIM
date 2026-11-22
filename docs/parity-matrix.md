@@ -19,7 +19,7 @@ These pins matched both remote main branches on November 21, 2026. To revise the
 | [Hosted authorization and evaluations](parity-hosted.md) | Identity, scope, public readiness, admission, evaluation jobs, resource ownership and recovery. |
 | [Operator and client workflows](parity-operations.md) | Commands, policies and profiles, providers, evaluation, local runtime, browser setup, hosted account and agent setup, packaging and release evidence. |
 
-The matrix contains 75 required rows and one optional proposal. All 75 required rows are open at the starting Java commit. Each row identifies the Python authority, the behavior to preserve, the Java owner, an acceptance case and the state of its evidence. Source inspection can establish a gap. A passing Java unit test can establish one behavior. Mark a required row verified only after its named public or packaged check passes and its review unit passes post-merge checks. For results spanning rows, link a single receipt from each affected row.
+The matrix contains 76 required rows and one optional proposal. All 76 were open at the starting Java commit. Paired HTTP discovery identified G23, the shipped modern notification subscription, after the first inventory. Each row identifies the Python authority, the behavior to preserve, the Java owner, an acceptance case and the state of its evidence. Source inspection can establish a gap. A passing Java unit test can establish one behavior. Mark a required row verified only after its named public or packaged check passes and its review unit passes post-merge checks. For results spanning rows, link a single receipt from each affected row.
 
 ## What the starting packages returned
 
@@ -32,7 +32,7 @@ One Python MCP SDK 2.2.0 client launched each stdio server with an empty home, n
 | Search with `top_k=0` | Input validation rejected the argument | The noop storage readiness check returned bootstrap instructions |
 | Protocol stream | The SDK read protocol frames without parse errors | The SDK recovered from repeated JSON-RPC parse failures caused by startup output |
 
-In a separate jar run, Java stdio opened a TCP listener and remained alive five seconds after stdin closed. Explicit non-web mode, a disabled banner and stderr logging allowed a clean stream and exit. PR #12 corrected the packaged launch defaults at `ea95f7c853feba21615b2d3bc8a579b00a71ab85`. G01 still requires protocol negotiation and data-backed calls. At the Python pin, 315 offline tests covering protocol, grounded MCP and policy generations passed. [More transport observations](parity-grounding.md#baseline-observations)
+In a separate jar run, Java stdio opened a TCP listener and remained alive five seconds after stdin closed. Explicit non-web mode, a disabled banner and stderr logging allowed a clean stream and exit. PR #12 corrected the packaged launch defaults at `ea95f7c853feba21615b2d3bc8a579b00a71ab85`. PR #13 brought the legacy stdio handshake to `2025-11-25` and verified Java HTTP retrieval through the installed jar with PostgreSQL. G01 remains open for grounded clients and canonical tool results. [Java SDK migration receipt](parity-grounding.md#legacy-client-migration) At the Python pin, 315 offline tests covering protocol, grounded MCP and policy generations passed. [More transport observations](parity-grounding.md#baseline-observations)
 
 ## Evidence to record for a completed row
 

@@ -1,10 +1,13 @@
 package io.policynim.mcp.health;
 
 import io.policynim.config.PolicyNimProperties;
+import io.policynim.mcp.transport.McpBootstrapConfiguration;
 import io.policynim.retrieval.PolicyChunkReadStore;
 import io.policynim.retrieval.ScoredPolicyChunk;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+import java.net.URI;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -12,17 +15,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StorageRuntimeReadinessServiceTests {
 
     @Test
+    void reportsTheSelectedHttpEndpointUnderThePublicBasePath() {
+        PolicyNimProperties properties = new PolicyNimProperties();
+        properties.getMcp().setPublicBaseUrl(URI.create("https://parity.invalid/platform/"));
+        properties.getMcp().setStreamableHttpPath("/fallback");
+        new ApplicationContextRunner()
+            .withBean(PolicyNimProperties.class, () -> properties)
+            .withUserConfiguration(McpBootstrapConfiguration.class, RuntimeReadinessConfiguration.class)
+            .withPropertyValues("spring.ai.mcp.server.streamable-http.mcp-endpoint=/selected-policies")
+            .run(context -> assertThat(context.getBean(RuntimeReadinessService.class).currentReadiness().mcpUrl())
+                .isEqualTo("https://parity.invalid/platform/selected-policies"));
+    }
+
+    @Test
     void reportsNoopStorageAsNotReadyWithRecoveryText() {
         PolicyNimProperties properties = new PolicyNimProperties();
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            PolicyChunkReadStore.noOp()
+            properties.getStorage(), PolicyChunkReadStore.noOp(), null
         ).currentReadiness();
 
         assertThat(response.ready()).isFalse();
         assertThat(response.status()).isEqualTo("error");
         assertThat(response.rowCount()).isZero();
+        assertThat(response.mcpUrl()).isNull();
         assertThat(response.reason())
             .contains("policy index is not wired yet")
             .contains("policynim.storage.mode=jdbc");
@@ -34,8 +50,7 @@ class StorageRuntimeReadinessServiceTests {
         PolicyNimProperties properties = jdbcProperties();
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            new FakeReadStore(false, 0)
+            properties.getStorage(), new FakeReadStore(false, 0), null
         ).currentReadiness();
 
         assertThat(response.ready()).isFalse();
@@ -50,8 +65,7 @@ class StorageRuntimeReadinessServiceTests {
         PolicyNimProperties properties = jdbcProperties();
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            new FakeReadStore(true, 0)
+            properties.getStorage(), new FakeReadStore(true, 0), null
         ).currentReadiness();
 
         assertThat(response.ready()).isFalse();
@@ -65,13 +79,13 @@ class StorageRuntimeReadinessServiceTests {
         PolicyNimProperties properties = jdbcProperties();
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            new FakeReadStore(true, 7)
+            properties.getStorage(), new FakeReadStore(true, 7), "https://parity.invalid/platform/selected-policies"
         ).currentReadiness();
 
         assertThat(response.ready()).isTrue();
         assertThat(response.status()).isEqualTo("ok");
         assertThat(response.rowCount()).isEqualTo(7);
+        assertThat(response.mcpUrl()).isEqualTo("https://parity.invalid/platform/selected-policies");
         assertThat(response.checks().get("storage").status()).isEqualTo("ok");
     }
 
@@ -81,8 +95,7 @@ class StorageRuntimeReadinessServiceTests {
         CountingReadStore readStore = new CountingReadStore(true, true, 7);
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            readStore
+            properties.getStorage(), readStore, null
         ).toolReadiness();
 
         assertThat(response.ready()).isTrue();
@@ -96,8 +109,7 @@ class StorageRuntimeReadinessServiceTests {
         PolicyNimProperties properties = jdbcProperties();
 
         HealthCheckResponse response = new StorageRuntimeReadinessService(
-            properties,
-            new FailingReadStore()
+            properties.getStorage(), new FailingReadStore(), null
         ).currentReadiness();
 
         assertThat(response.ready()).isFalse();
