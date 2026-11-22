@@ -102,7 +102,22 @@ final class ProfileInitializer {
         } else {
             selector = posix(root);
         }
+        if (selector.startsWith("builtin:")) {
+            throw new InvalidPolicyDocumentException(
+                "This directory name is reserved for bundled selectors. Choose a local pack directory without a colon.");
+        }
+        // A profile Text field trims surrounding Unicode whitespace. Keep both filename edges inside components.
+        if (isWhitespace(selector.codePointAt(0))) {
+            selector = "./" + selector;
+        }
+        if (isWhitespace(selector.codePointBefore(selector.length()))) {
+            selector += "/.";
+        }
         return PackLocation.normalize(selector);
+    }
+
+    private static boolean isWhitespace(int point) {
+        return Character.isWhitespace(point) || Character.isSpaceChar(point) || point == 0x85;
     }
 
     private static String posix(Path path) {

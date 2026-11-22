@@ -21,7 +21,7 @@ final class InitialProfileToml {
             text.append("\n[packs.policies]\n");
             pin.policies().forEach((id, digest) -> field(text, BARE_KEY.matcher(id).matches() ? id : quote(id), digest));
         }
-        return text.toString();
+        return text.toString().replace("\n", System.lineSeparator());
     }
 
     private static void field(StringBuilder text, String key, String value) {

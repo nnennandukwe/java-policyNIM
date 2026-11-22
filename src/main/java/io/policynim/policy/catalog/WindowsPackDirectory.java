@@ -2,6 +2,8 @@ package io.policynim.policy.catalog;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
@@ -20,6 +22,7 @@ final class WindowsPackDirectory extends PackDirectory {
                             int attributes, Pointer template);
         int GetFileType(Pointer handle);
         int GetFileInformationByHandle(Pointer handle, Pointer information);
+        int GetFileInformationByHandleEx(Pointer handle, int infoClass, @Out byte[] information, int size);
         int GetFinalPathNameByHandleW(Pointer handle, @Out byte[] path, int characters, int flags);
         int ReadFile(Pointer handle, @Out byte[] bytes, int length, @Out IntByReference count, Pointer overlapped);
         int CloseHandle(Pointer handle);
@@ -80,6 +83,24 @@ final class WindowsPackDirectory extends PackDirectory {
             return Path.of(wide.substring(4));
         }
         return Path.of(wide);
+    }
+
+    // FILE_ID_INFO contains a 64-bit volume serial followed by a 128-bit file identifier.
+    private record FileId(long volume, long first, long second) { }
+
+    static Object publicationFileId(Path path) throws IOException {
+        final int fileIdInfo = 18;
+        Pointer handle = openHandle(path, FILE_READ_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+        try {
+            byte[] data = new byte[24];
+            if (API.GetFileInformationByHandleEx(handle, fileIdInfo, data, data.length) == 0) {
+                throw new IOException("Couldn't establish file identity for profile publication.");
+            }
+            var id = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+            return new FileId(id.getLong(), id.getLong(), id.getLong());
+        } finally {
+            closeHandle(handle);
+        }
     }
 
     private static int attributes(Pointer handle) throws IOException {
