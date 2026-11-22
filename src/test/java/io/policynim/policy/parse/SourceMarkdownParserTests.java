@@ -11,6 +11,21 @@ class SourceMarkdownParserTests {
     private final SourceMarkdownParser parser = new SourceMarkdownParser();
 
     @Test
+    void aPackMemberRetainsBodyLinesWhenItsMetadataIsDeclaredInTheManifest() {
+        String policy = "---\npolicy_id: PACK-1\ngrounded_in: [source]\n---\n# Selected\n";
+        var document = parser.parsePackMember("policies/rule.md", policy);
+        assertThat(document).isEqualTo(parser.parse("policies/rule.md", policy));
+        assertThat(document.bodyStartLine()).isEqualTo(5);
+        assertThat(document.metadata().groundedIn()).containsExactly("source");
+
+        String misplaced = policy.replace("grounded_in:", "provenance:");
+        assertThatThrownBy(() -> parser.parsePackMember("policies/rule.md", misplaced))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageContaining("unsupported frontmatter keys: provenance");
+        assertThat(parser.parse("policies/rule.md", misplaced).bodyStartLine()).isEqualTo(5);
+    }
+
+    @Test
     void preservesTheUnfrontedBodyAndInfersTheWholeUnicodePath() {
         String body = "\r\n> ## early\r\n\r\n> One *literal*\r\n>   second\r\n> ======\r\n";
         // # non-English test data
