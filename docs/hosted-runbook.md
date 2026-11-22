@@ -123,7 +123,7 @@ java -jar /app/policynim.jar policies validate --source --format json
 java -jar /app/policynim.jar policies show SEC-AUTH-001 --source --format json
 ```
 
-The shipped pack contains 26 policies. To inspect your own directory, set `POLICYNIM_CORPUS_DIR` in the process environment or in a file named by `POLICYNIM_CONFIG_FILE`. The process setting takes precedence over the file. A relative path starts at your working directory. You can override the environment for one command with `--corpus-root`. Set `POLICYNIM_CORPUS_DIR` to an empty string to use the shipped pack even when the settings file names another corpus. If the jar reports a malformed source setting, correct the named setting or pass the directory with `--corpus-root`. If a bundled file can't be read, reinstall the jar or select a local directory. Source inspection requires `--source` until the jar supports active-generation selection. Profile selection and automatic settings-file discovery have their own parity work. [Source selection Build Plan](build-plans/bundled-source-catalog.md)
+The shipped pack contains 26 policies. To inspect your own directory, set `POLICYNIM_CORPUS_DIR` in the process environment or in a file named by `POLICYNIM_CONFIG_FILE`. The process setting takes precedence over the file. A relative path starts at your working directory. You can override the environment for one command with `--corpus-root`. Set `POLICYNIM_CORPUS_DIR` to an empty string to use the shipped pack even when the settings file names another corpus. If the jar reports a malformed source setting, correct the named setting or pass the directory with `--corpus-root`. If a bundled file can't be read, reinstall the jar or select a local directory. Source inspection requires `--source` until the jar supports active-generation selection. [Source selection Build Plan](build-plans/bundled-source-catalog.md)
 
 Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Put `policies` immediately after the jar path. Select a directory containing policy Markdown. When a root `pack.toml` is present, the command reads the declared policy members. In a plain directory it reads nested Markdown and skips `TEMPLATE.md`. For a path relative to the current directory, use the same working directory for all three commands.
 
@@ -153,6 +153,26 @@ requirement_level = "recommended"
 ```
 
 If a file can't be read or two entries declare the same ID, fix the reported source and rerun `validate`. JSON mode returns one error object on stdout and exit 1 for an invalid source. Command usage errors go to stderr with exit 2. A file alias must resolve within the selected root. Inspect an operator-controlled directory while its contents are stable. The command reports a detected change during capture.
+
+## Inspect a policy profile
+
+A profile is a TOML file that names policy packs, pins their revisions and records why a policy was excluded or replaced. `preview` shows every authored policy, including inactive entries and the recorded reason. `validate` checks the pins and the profile's decisions. Run these commands with the path to a local profile.
+
+```bash
+java -jar /app/policynim.jar profile preview /work/team.toml
+java -jar /app/policynim.jar profile validate /work/team.toml --format json
+```
+
+A relative pack path starts at the profile's parent directory. A selector such as `builtin:security` reads that topic pack from the jar. The spelling and order of pack selectors contribute to the profile and catalog digests. Use the original selector spelling when comparing a reviewed revision. If a pin is stale, inspect the changed pack and review the profile before trying validation again.
+
+To look up one policy in that profile, set `POLICYNIM_PROFILE` to its file and run the source command. Clear `POLICYNIM_CORPUS_DIR` when selecting a profile. The same two settings work in the file named by `POLICYNIM_CONFIG_FILE`. The process environment overrides each corresponding file value. The Java `--corpus-root` flag selects a directory for one source command.
+
+```bash
+POLICYNIM_PROFILE=/work/team.toml java -jar /app/policynim.jar policies list --source
+POLICYNIM_PROFILE=/work/team.toml java -jar /app/policynim.jar policies show SEC-AUTH-001 --source --format json
+```
+
+Source inspection retains inactive members, their original bodies and their target digests. Use the effective count to see how many policies the profile selects. A failed profile check writes no changes to the profile or its packs. [Read-only profile Build Plan](build-plans/read-only-policy-profiles.md)
 
 ## Ingest Policies
 

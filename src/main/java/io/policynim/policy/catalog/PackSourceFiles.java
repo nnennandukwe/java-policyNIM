@@ -26,17 +26,21 @@ final class PackSourceFiles {
         void accept(String path, String sourcePath, byte[] bytes, PolicyPackManifest manifest, PolicyPackManifest.Member member);
     }
 
+    record ReadResult(PolicyPackManifest manifest, List<String> unlisted) { }
+
     private record Selection(PolicyPackManifest.Member member, PackDirectory.ResolvedFile file) { }
 
     private PackSourceFiles() { }
 
-    static List<String> read(Path root, Consumer consumer) throws IOException {
+    static ReadResult read(Path root, Consumer consumer) throws IOException {
         try (PackDirectory directory = PackDirectory.open(root)) {
             PackDirectory.ResolvedFile manifestFile;
             byte[] manifestBytes;
             try {
                 manifestFile = directory.resolve("pack.toml");
                 manifestBytes = directory.read(manifestFile);
+            } catch (NoSuchFileException absent) {
+                throw PackLocation.missingManifest();
             } catch (PackDirectory.OutsideRootException outside) {
                 throw new InvalidPolicyDocumentException("pack.toml must stay within the policy root.", outside);
             } catch (IOException error) {
@@ -85,7 +89,7 @@ final class PackSourceFiles {
                 throw failure;
             }
             verifyManifest(directory, manifestFile, manifestBytes);
-            return unlisted;
+            return new ReadResult(manifest, List.copyOf(unlisted));
         } catch (IOException failure) {
             throw publicFailure(failure, "Couldn't inspect the selected policy pack. Check directory access and retry.");
         }

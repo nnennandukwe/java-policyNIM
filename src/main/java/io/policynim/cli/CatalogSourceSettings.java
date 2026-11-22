@@ -29,9 +29,18 @@ final class CatalogSourceSettings {
         String root = corpus == null ? "" : SourceMarkdownParser.strip(corpus);
         String profile = env.getOrDefault(PROFILE, settings.profile());
         if (profile != null) {
-            String problem = root.isEmpty() ? "Source inspection can't resolve " + PROFILE + " yet."
-                : "Set only one of " + PROFILE + " and " + CORPUS + ".";
-            throw new InvalidPolicyDocumentException(problem + ROOT_HINT);
+            if (SourceMarkdownParser.strip(profile).isEmpty()) {
+                throw new InvalidPolicyDocumentException(PROFILE + " must name a profile file or be unset." + ROOT_HINT);
+            }
+            if (!root.isEmpty()) {
+                throw new InvalidPolicyDocumentException("Set only one of " + PROFILE + " and " + CORPUS + "." + ROOT_HINT);
+            }
+            Path file = path(profile, PROFILE);
+            try {
+                return SourceCatalog.readProfile(file);
+            } catch (InvalidPolicyDocumentException invalid) {
+                throw new InvalidPolicyDocumentException(invalid.getMessage() + " Check " + PROFILE + ".", invalid);
+            }
         }
         return root.isEmpty() ? SourceCatalog.readBundled() : SourceCatalog.read(path(root, CORPUS));
     }

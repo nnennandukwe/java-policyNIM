@@ -31,6 +31,8 @@ The default runtime is offline from live providers: NVIDIA-backed embedding, rer
 
 Run `java -jar target/policynim.jar policies list --source` to see the 26 policies shipped in the jar. Use `POLICYNIM_CORPUS_DIR` or pass `--corpus-root=/absolute/path/to/policies` to inspect your own directory. The commands run without JDBC or a provider key. [List policies and inspect their revisions](docs/hosted-runbook.md#inspect-a-local-policy-directory)
 
+Run `java -jar target/policynim.jar profile preview team.toml` to see which policies a pinned profile keeps, excludes or replaces. Use `profile validate team.toml --format json` to check its pack revisions and declared conflicts. [Inspect a policy profile](docs/hosted-runbook.md#inspect-a-policy-profile)
+
 Build the application jar, configure JDBC storage, then populate the policy chunk table:
 
 ```bash

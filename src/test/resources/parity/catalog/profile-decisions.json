@@ -1,0 +1,139 @@
+{
+  "files": {
+    "team.toml": "schema_version = 1\nprofile_id = \"team\"\n\n[[packs]]\npath = \"base\"\npack_id = \"review.base\"\nversion = \"1.0.0\"\ndigest = \"sha256:a0486bb88e8d9547c56f0c196036b23bb139973c5937151c3b368d6d5d1156cc\"\n\n[packs.policies]\nA = \"sha256:41374b801b1e444c1f37b766d580a240e92042d9415a39dafa361fe8bd0b3689\"\nB = \"sha256:75cb7282d5699c7056cb3b5c7b539159598662125cffc60d4aa6d37a869ea9ec\"\nC = \"sha256:4acdcb6ae48bdf2f275cb4e011a60fd6a09bf22e5b095a720acd3f0e3ebd9326\"\n\n[[packs]]\npath = \"team\"\npack_id = \"review.team\"\nversion = \"1.0.0\"\ndigest = \"sha256:d74da3845da54d999ce629b076a8270b4614c8246585aea68a69510e1fae73c4\"\n\n[packs.policies]\nD = \"sha256:d74da3845da54d999ce629b076a8270b4614c8246585aea68a69510e1fae73c4\"\n\n[[exclusions]]\ntarget_id = \"B\"\nexpected_digest = \"sha256:5da30e53cc45f3be8c011f82fddfa762aa750dbd3170a3626865ef00ccd3ba12\"\nreason = \"No tier.\"\n\n[[replacements]]\ntarget_id = \"A\"\nexpected_digest = \"sha256:9783d7b0ca4e7a5cd4c0bb998c8a7b797a4974d1df1aa0a770655470cf5adb41\"\nreason = \"Reviewed local rule.\"\nreplacement_id = \"D\"\n\n[[conflicts]]\nleft = \"A\"\nright = \"D\"\nreason = \"Use one.\"\n",
+    "base/pack.toml": "schema_version = 1\npack_id = \"review.base\"\nversion = \"1.0.0\"\n\n[[policies]]\npolicy_id = \"A\"\npath = \"A.md\"\n\n[[policies]]\npolicy_id = \"B\"\npath = \"B.md\"\n\n[[policies]]\npolicy_id = \"C\"\npath = \"C.md\"\n",
+    "base/A.md": "---\npolicy_id: A\ntitle: Item A\ndomain: ops\n---\n# Item A\n\nUse rule A.\n",
+    "base/B.md": "---\npolicy_id: B\ntitle: Item B\ndomain: ops\n---\n# Item B\n\nUse rule B.\n",
+    "base/C.md": "---\npolicy_id: C\ntitle: Item C\ndomain: ops\n---\n# Item C\n\nUse rule C.\n",
+    "team/pack.toml": "schema_version = 1\npack_id = \"review.team\"\nversion = \"1.0.0\"\n\n[[policies]]\npolicy_id = \"D\"\npath = \"D.md\"\n",
+    "team/D.md": "---\npolicy_id: D\ntitle: Item D\ndomain: ops\n---\n# Item D\n\nUse rule D.\n"
+  },
+  "catalog": {
+    "schema_version": 1,
+    "scope": "source",
+    "generation_id": null,
+    "digest": "sha256:369df1b4e0b7ec9419d46299a3d6354a6f5c564e97ff06f1e26c4a9f3cde73f6",
+    "profile_id": "team",
+    "profile_digest": "sha256:f84fc8be963c1d8d8c2909d83810d99cfa377c6e0f34faa1a4b4e878c48d4c55",
+    "pack_pins": [
+      {
+        "path": "base",
+        "pack_id": "review.base",
+        "version": "1.0.0",
+        "digest": "sha256:a0486bb88e8d9547c56f0c196036b23bb139973c5937151c3b368d6d5d1156cc"
+      },
+      {
+        "path": "team",
+        "pack_id": "review.team",
+        "version": "1.0.0",
+        "digest": "sha256:d74da3845da54d999ce629b076a8270b4614c8246585aea68a69510e1fae73c4"
+      }
+    ],
+    "authored_count": 4,
+    "effective_count": 2,
+    "indexed_count": null,
+    "unlisted_markdown": [],
+    "policies": [
+      {
+        "state": "replaced",
+        "target_digest": "sha256:9783d7b0ca4e7a5cd4c0bb998c8a7b797a4974d1df1aa0a770655470cf5adb41",
+        "reason": "Reviewed local rule.",
+        "replacement_id": "D",
+        "path": "review.base/A.md",
+        "policy": {
+          "policy_id": "A",
+          "title": "Item A",
+          "doc_type": "guidance",
+          "domain": "ops",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:b1c6a803e271909912883b0f27fd08a64e8e6061705d2239567a2a352a74820a",
+            "pack_id": "review.base",
+            "pack_version": "1.0.0",
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "# Item A\n\nUse rule A.\n"
+      },
+      {
+        "state": "excluded",
+        "target_digest": "sha256:5da30e53cc45f3be8c011f82fddfa762aa750dbd3170a3626865ef00ccd3ba12",
+        "reason": "No tier.",
+        "replacement_id": null,
+        "path": "review.base/B.md",
+        "policy": {
+          "policy_id": "B",
+          "title": "Item B",
+          "doc_type": "guidance",
+          "domain": "ops",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:22b0c251b8a999e70016bbf6b68fb25cf1357896ed9154d7a267159dfd2e168b",
+            "pack_id": "review.base",
+            "pack_version": "1.0.0",
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "# Item B\n\nUse rule B.\n"
+      },
+      {
+        "state": "active",
+        "target_digest": "sha256:95807de3591d6b62bcb44e74f7341d391e9b58a4b9034d6f54df0c7055ceac01",
+        "reason": null,
+        "replacement_id": null,
+        "path": "review.base/C.md",
+        "policy": {
+          "policy_id": "C",
+          "title": "Item C",
+          "doc_type": "guidance",
+          "domain": "ops",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:84c5452ae1912ee1e9ca80baecbf577b3be120117009be9ffe8ebf3e1a5ff410",
+            "pack_id": "review.base",
+            "pack_version": "1.0.0",
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "# Item C\n\nUse rule C.\n"
+      },
+      {
+        "state": "active",
+        "target_digest": "sha256:b0ac8291802ccdd631cf5a3c5e6af9d15f01b132846a3ea30bdc3e3a6b89faa5",
+        "reason": null,
+        "replacement_id": null,
+        "path": "review.team/D.md",
+        "policy": {
+          "policy_id": "D",
+          "title": "Item D",
+          "doc_type": "guidance",
+          "domain": "ops",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:62df28458ac3f14286b6292145505372c80bac714e9ec16f0f2a70a70f42065e",
+            "pack_id": "review.team",
+            "pack_version": "1.0.0",
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "# Item D\n\nUse rule D.\n"
+      }
+    ]
+  }
+}
