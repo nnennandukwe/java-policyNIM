@@ -95,6 +95,8 @@ Build the Java jar with the package command in the hosted runbook. From an isola
 
 The check creates a temporary home for each server, verifies its negotiated revision and installed version, calls search without a required query, and lists tools again on the same session. Java and Python each have their own expected tool names for this migration. The result includes the jar checksum. [Package checks](../hosted-runbook.md)
 
+The JDBC test uses the same Markdown file a Python operator can select with `POLICYNIM_CORPUS_DIR`. The pinned Python CLI accepted it with `policynim policies validate --source --format json` and reported one effective policy. Its source catalog digest was `sha256:8235dea85dcda12002099e86802cb31ece64c5597ae9f1ca2dc736be3d46b749`. The Java check runs jar ingest in one process and verifies the returned policy ID, path, body, and lines in another. [Shared recovery policy](../../src/test/resources/parity/policies/recovery.md)
+
 ## Definition Of Done
 
 In `grounded-v1`, both transports negotiate the two reference protocols, execute the existing tools, report the installed Java version, reject bad envelopes at the correct boundary, and release their runtime resources. With the setting omitted or set to `java-v1`, existing clients retain their verified stateful HTTP and stdio flows. Attach the separate exact-head local and hosted reviews, merge commits, post-merge runs, and package evidence for all three review units to G01. Keep G01 open for any successful canonical call or proof that depends on later tool or storage rows. Leave G02–G04 open until their feature proofs pass.

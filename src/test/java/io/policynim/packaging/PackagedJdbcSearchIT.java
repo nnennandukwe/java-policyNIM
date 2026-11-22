@@ -6,6 +6,7 @@ import io.policynim.support.PackagedMcpHttp;
 import io.policynim.support.PostgresTestContainerConfiguration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.io.ClassPathResource;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -33,15 +34,9 @@ class PackagedJdbcSearchIT {
     @Test
     void separateJarReadsIngestedPolicyOverAuthenticatedHttp(@TempDir Path directory) throws Exception {
         Path corpus = Files.createDirectory(directory.resolve("policies"));
-        Files.writeString(corpus.resolve("recovery.md"), """
-            ---
-            policy_id: OPS-RECOVERY-001
-            title: Recovery
-            domain: reliability
-            ---
-            # Recovery
-            Record a checkpoint before restoring the queue.
-            """);
+        try (var fixture = new ClassPathResource("parity/policies/recovery.md").getInputStream()) {
+            Files.copy(fixture, corpus.resolve("recovery.md"));
+        }
         try (var postgres = PostgresTestContainerConfiguration.postgresContainer()) {
             postgres.start();
             var database = Map.of(
