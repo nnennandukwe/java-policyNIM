@@ -96,7 +96,7 @@ public final class ProfileCommand {
         for (String field : List.of("added", "changed", "removed", "changed_packs", "invalidated_decisions")) {
             var names = new StringJoiner(", ").setEmptyValue("(none)");
             for (JsonNode id : report.required(field)) {
-                names.add(id.textValue());
+                names.add(SourceCatalogCommand.pathForDisplay(id.textValue(), true));
             }
             output.printf("%s: %s%n", field, names);
         }
