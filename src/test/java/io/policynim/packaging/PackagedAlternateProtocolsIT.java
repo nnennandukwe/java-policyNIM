@@ -14,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Map;
@@ -29,6 +30,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PackagedAlternateProtocolsIT {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    @Test
+    void sseEndsTheOpenEventStreamDuringGracefulShutdown(@TempDir Path directory) throws Exception {
+        String token = UUID.randomUUID().toString();
+        Process process = PackagedMcpHttp.startServer(directory, Map.of("SPRING_AI_MCP_SERVER_PROTOCOL", "SSE"), token);
+        try (var http = HttpClient.newHttpClient()) {
+            var origin = PackagedMcpHttp.readBoundOrigin(process);
+            var stream = http.send(request(origin.resolve("/sse")).header("Authorization", "Bearer " + token)
+                .GET().build(), HttpResponse.BodyHandlers.ofInputStream());
+            try (var events = stream.body()) {
+                assertThat(stream.statusCode()).isEqualTo(200);
+                process.destroy();
+                assertThat(process.waitFor(8, TimeUnit.SECONDS)).as("SSE shutdown with a connected client").isTrue();
+                assertThat(new String(events.readAllBytes(), StandardCharsets.UTF_8)).contains("/mcp/message?sessionId=");
+            }
+        }
+        finally {
+            PackagedMcpHttp.reap(process);
+        }
+    }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})

@@ -34,9 +34,13 @@ class LegacyHttpTransportConfiguration {
     ApplicationListener<ContextClosedEvent> closeMcpSessionsBeforeHttpDrain(
         ApplicationContext context, SessionHttpServlet transport
     ) {
+        return beforeHttpDrain(context, transport::destroy);
+    }
+
+    static ApplicationListener<ContextClosedEvent> beforeHttpDrain(ApplicationContext context, Runnable closeTransport) {
         return event -> {
             if (event.getApplicationContext() == context) {
-                transport.destroy();
+                closeTransport.run();
             }
         };
     }

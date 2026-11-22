@@ -11,9 +11,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.core.env.Environment;
 
 import java.time.Duration;
@@ -27,29 +30,49 @@ class LegacyAlternateHttpConfiguration {
     private static final String PREFIX = "spring.ai.mcp.server.";
 
     // The SSE servlet remains available to clients that explicitly select this legacy protocol.
-    @Bean
+    @Bean(destroyMethod = "destroy")
     @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
-    ServletRegistrationBean<HttpServletSseServerTransportProvider> legacySseServlet(Environment environment) {
-        String events = environment.getProperty(PREFIX + "sse-endpoint", "/sse");
-        String messages = environment.getProperty(PREFIX + "sse-message-endpoint", "/mcp/message");
+    LegacySseServlet legacySseTransport(Environment environment) {
         var transport = HttpServletSseServerTransportProvider.builder()
             .jsonMapper(new JacksonMcpJsonMapper(LegacyTransportJson.objectMapper()))
             .baseUrl(environment.getProperty(PREFIX + "base-url", ""))
-            .sseEndpoint(events)
-            .messageEndpoint(messages)
+            .sseEndpoint(sseEndpoint(environment))
+            .messageEndpoint(sseMessageEndpoint(environment))
             .keepAliveInterval(Binder.get(environment).bind(PREFIX + "keep-alive-interval", Duration.class).orElse(null))
             .build();
-        var registration = new ServletRegistrationBean<>(transport, events, messages);
+        return new LegacySseServlet(transport);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
+    ServletRegistrationBean<LegacySseServlet> legacySseServlet(
+        LegacySseServlet transport, Environment environment
+    ) {
+        var registration = new ServletRegistrationBean<>(transport, sseEndpoint(environment), sseMessageEndpoint(environment));
         registration.setAsyncSupported(true);
         registration.setName("policyNimSse");
         return registration;
     }
 
+    private static String sseEndpoint(Environment environment) {
+        return environment.getProperty(PREFIX + "sse-endpoint", "/sse");
+    }
+
+    private static String sseMessageEndpoint(Environment environment) {
+        return environment.getProperty(PREFIX + "sse-message-endpoint", "/mcp/message");
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
+    ApplicationListener<ContextClosedEvent> closeSseStreamsBeforeHttpDrain(ApplicationContext context,
+        LegacySseServlet transport) {
+        return LegacyHttpTransportConfiguration.beforeHttpDrain(context, transport::destroy);
+    }
+
     @Bean(destroyMethod = "closeGracefully")
     @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
-    McpSyncServer legacySseServer(ServletRegistrationBean<HttpServletSseServerTransportProvider> registration,
-        LegacyMcpServerConfiguration settings) {
-        return settings.build(McpServer.sync(registration.getServlet()));
+    McpSyncServer legacySseServer(LegacySseServlet transport, LegacyMcpServerConfiguration settings) {
+        return settings.build(McpServer.sync(transport.transport()));
     }
 
     @Bean
