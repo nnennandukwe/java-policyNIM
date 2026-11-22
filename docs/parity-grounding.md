@@ -50,7 +50,7 @@ Python module paths in the tables start at `src/policynim/` and test paths start
 
 ## Stdio launch work
 
-G01 has a [packaged stdio build plan](build-plans/stdio-launch.md). Its launch check covers framing, listener ownership and stdin closure for existing Java clients. The modern discovery and legacy version requirements still need separate cross-language evidence.
+The packaged stdio launch portion of G01 passed at merge `ea95f7c853feba21615b2d3bc8a579b00a71ab85`. The reviewed head was `8b944f2ffce68a01c0de8853af8685e57584d3a2`, and both commits have the same tree. The fresh merge jar (SHA-256 `0fa36e383c5bfdace25e89684e3b4bbc833fea28465d36dcd158acf4c02433cb`) passed both packaged launch tests with an occupied port and clean exit after EOF. The same Python MCP SDK 2.2.0 legacy client listed tools without a parse error on the merge jar and on Python `fcc5322`. Java negotiated `2024-11-05` and Python negotiated `2025-11-25`. The five post-merge jobs passed, including the JDBC and package lanes. G01 remains open for the [negotiation build](build-plans/mcp-negotiation.md). [Launch plan](build-plans/stdio-launch.md) · [PR #12](https://github.com/nnennandukwe/java-policyNIM/pull/12) · [Post-merge run](https://github.com/nnennandukwe/java-policyNIM/actions/runs/44972586171)
 
 ## Baseline observations
 
