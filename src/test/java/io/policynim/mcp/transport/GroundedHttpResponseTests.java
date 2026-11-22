@@ -3,6 +3,7 @@ package io.policynim.mcp.transport;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.modern.server.transport.HttpServletMcpTransport;
 import io.modelcontextprotocol.server.transport.HttpServletStatelessServerTransport;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -11,11 +12,19 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.mockito.Mockito.mock;
 
 class GroundedHttpResponseTests {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+    private final GroundedHttpServlet servlet = new GroundedHttpServlet("/mcp",
+        mock(HttpServletStatelessServerTransport.class), mock(HttpServletMcpTransport.class));
+
+    @AfterEach
+    void closeServlet() {
+        servlet.destroy();
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {
@@ -58,6 +67,29 @@ class GroundedHttpResponseTests {
         assertRejection(post(fields, "2025-11-25"), -32602);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "\"id\":1,\"method\":\"ping\",\"result\":{}",
+        "\"error\":{\"code\":1,\"message\":\"error\"},\"method\":\"ping\",\"id\":1",
+        "\"method\":\"notifications/initialized\",\"error\":null",
+        "\"id\":1,\"method\":null,\"result\":{}",
+        "\"id\":1,\"result\":{},\"method\":[]",
+        "\"params\":null,\"id\":1,\"result\":{}",
+        "\"id\":1,\"error\":{\"code\":1,\"message\":\"error\"},\"params\":{}",
+        "\"id\":1,\"params\":{\"value\":1},\"error\":{\"code\":1,\"message\":\"error\"}",
+        "\"id\":1,\"result\":{},\"params\":[]",
+        "\"id\":1,\"method\":false,\"params\":{}",
+        "\"id\":1,\"params\":{}",
+        "\"id\":1"
+    })
+    void rejectsMixedOrUnclassifiedFramesOnBothProtocolsAndAcceptsTheNextValidResponse(String fields) {
+        assertAll(
+            () -> assertRejection(post(fields, "2025-11-25"), -32602),
+            () -> assertRejection(post(fields, "2026-07-28"), -32600),
+            () -> assertThat(post("\"id\":2,\"result\":{}", "2025-11-25").getStatus()).isEqualTo(202)
+        );
+    }
+
     private void assertRejection(MockHttpServletResponse response, int code) throws Exception {
         assertThat(response.getStatus()).isEqualTo(400);
         var frame = JSON.readTree(response.getContentAsByteArray());
@@ -66,20 +98,13 @@ class GroundedHttpResponseTests {
     }
 
     private MockHttpServletResponse post(String fields, String version) throws Exception {
-        var servlet = new GroundedHttpServlet("/mcp", mock(HttpServletStatelessServerTransport.class),
-            mock(HttpServletMcpTransport.class));
-        try {
-            var request = new MockHttpServletRequest("POST", "/mcp");
-            request.setContentType("application/json");
-            request.addHeader("Accept", "application/json");
-            request.addHeader("MCP-Protocol-Version", version);
-            request.setContent(("{\"jsonrpc\":\"2.0\"," + fields + "}").getBytes(StandardCharsets.UTF_8));
-            var response = new MockHttpServletResponse();
-            servlet.service(request, response);
-            return response;
-        }
-        finally {
-            servlet.destroy();
-        }
+        var request = new MockHttpServletRequest("POST", "/mcp");
+        request.setContentType("application/json");
+        request.addHeader("Accept", "application/json");
+        request.addHeader("MCP-Protocol-Version", version);
+        request.setContent(("{\"jsonrpc\":\"2.0\"," + fields + "}").getBytes(StandardCharsets.UTF_8));
+        var response = new MockHttpServletResponse();
+        servlet.service(request, response);
+        return response;
     }
 }

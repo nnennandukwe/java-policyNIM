@@ -58,22 +58,30 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         };
     }
 
-    record Envelope(String version, JsonNode id, String method, boolean validParams, JsonToken resultToken,
-        boolean hasError, boolean validError, JsonNode metadata) {
+    private enum Shape {
+        NONE, REQUEST, RESULT, ERROR, MIXED;
+
+        Shape include(Shape field) {
+            return this == NONE || this == field ? field : MIXED;
+        }
+    }
+
+    record Envelope(String version, JsonNode id, String method, Shape shape, boolean validParams,
+        boolean validResponseBody, JsonNode metadata) {
         boolean validRequest() {
-            return "2.0".equals(version) && method != null && validParams && !hasResultAndError()
+            return shape == Shape.REQUEST && "2.0".equals(version) && method != null && validParams
                 && (id == null || validId());
         }
 
         boolean validResponse() {
-            if (!"2.0".equals(version) || id == null || hasResultAndError()) {
+            if (!"2.0".equals(version) || id == null || !validResponseBody) {
                 return false;
             }
-            return id.isNull() ? validError : validId() && (resultToken == JsonToken.START_OBJECT || validError);
-        }
-
-        private boolean hasResultAndError() {
-            return resultToken != null && hasError;
+            return switch (shape) {
+                case RESULT -> validId();
+                case ERROR -> id.isNull() || validId();
+                default -> false;
+            };
         }
 
         private boolean validId() {
@@ -86,9 +94,8 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
         String version = null;
         JsonNode id = null;
         String method = null;
-        JsonToken resultToken = null;
-        boolean hasError = false;
-        boolean validError = false;
+        Shape shape = Shape.NONE;
+        boolean validResponseBody = false;
         boolean validParams = true;
         JsonNode metadata = null;
         try (var parser = json.createParser(body)) {
@@ -103,13 +110,20 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                     switch (field) {
                         case "id" -> id = value.isScalarValue() ? json.readTree(parser) : MissingNode.getInstance();
                         case "jsonrpc" -> version = value == JsonToken.VALUE_STRING ? parser.getText() : null;
-                        case "method" -> method = value == JsonToken.VALUE_STRING ? parser.getText() : null;
-                        case "result" -> resultToken = value;
+                        case "method" -> {
+                            shape = shape.include(Shape.REQUEST);
+                            method = value == JsonToken.VALUE_STRING ? parser.getText() : null;
+                        }
+                        case "result" -> {
+                            shape = shape.include(Shape.RESULT);
+                            validResponseBody = value == JsonToken.START_OBJECT;
+                        }
                         case "error" -> {
-                            hasError = true;
-                            validError = validError(parser, value);
+                            shape = shape.include(Shape.ERROR);
+                            validResponseBody = validError(parser, value);
                         }
                         case "params" -> {
+                            shape = shape.include(Shape.REQUEST);
                             validParams = value == JsonToken.START_OBJECT || value == JsonToken.VALUE_NULL;
                             metadata = metadata(parser, value, json);
                         }
@@ -125,7 +139,7 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
                 throw new IOException("Expected a single JSON value");
             }
         }
-        return new Envelope(version, id, method, validParams, resultToken, hasError, validError, metadata);
+        return new Envelope(version, id, method, shape, validParams, validResponseBody, metadata);
     }
 
     private static boolean validError(JsonParser parser, JsonToken value) throws IOException {
@@ -138,6 +152,7 @@ final class GroundedHttpRequest extends HttpServletRequestWrapper {
             String field = parser.currentName();
             JsonToken token = parser.nextToken();
             if ("code".equals(field)) {
+                // JSON integers can use decimal notation. Check the exact value to preserve fractional digits.
                 hasCode = token == JsonToken.VALUE_NUMBER_INT || (token == JsonToken.VALUE_NUMBER_FLOAT
                     && parser.getDecimalValue().stripTrailingZeros().scale() <= 0);
             }

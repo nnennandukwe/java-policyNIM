@@ -204,7 +204,13 @@ async def raw_round_trip(product, endpoint, token):
             ("legacy error with null id", LEGACY, None, {"error": {"code": -32602, "message": "Invalid params"}},
              202, None),
             ("legacy error missing code", LEGACY, None, {"error": {"message": "Invalid params"}}, 400, -32602),
+            ("legacy integer-valued error code", LEGACY, "reply", {"error": {"code": 1.0, "message": "Sample error"}},
+             202, None),
+            ("legacy fractional error code", LEGACY, "reply", {"error": {"code": 1.25, "message": "Sample error"}},
+             400, -32602),
             ("modern posted response", MODERN, "reply", {"result": {"value": None}}, 400, -32600),
+            ("modern params with error", MODERN, "reply", {"params": {}, "error": {"code": 1, "message": "Sample error"}},
+             400, -32600),
         ]
         # Python 2.2.0 accepts these legacy replies. Java enforces the JSON-RPC member and code types.
         strict_status, strict_code = {"java": (400, -32602), "python": (202, None)}[product]
@@ -213,27 +219,35 @@ async def raw_round_trip(product, endpoint, token):
             "legacy null result plus valid error": {"result": None, "error": {"code": -32602, "message": "Invalid params"}},
             "legacy string error code": {"error": {"code": "-32602", "message": "Invalid params"}},
             "legacy boolean error code": {"error": {"code": True, "message": "Invalid params"}},
+            "legacy ping with array params and result": {"method": "ping", "params": [], "result": {}},
+            "legacy nonstring method with array params and result": {"method": 123, "params": [], "result": {}},
+            "legacy params with error": {"params": {}, "error": {"code": 1, "message": "Sample error"}},
         }
         posted.extend((label, LEGACY, "reply", payload, strict_status, strict_code)
                       for label, payload in invalid_replies.items())
+        # Python dispatches the ping when both method and result are present.
+        ping_status, ping_code = {"java": (400, -32602), "python": (200, None)}[product]
+        posted.append(("legacy ping with result", LEGACY, "reply", {"method": "ping", "result": {}}, ping_status, ping_code))
         observed["postedResponses"] = {}
         for label, version, reply_id, payload, status, code in posted:
             response = await http.post(endpoint, headers={"Authorization": f"Bearer {token}",
                 "MCP-Protocol-Version": version, "Accept": "application/json"},
                 json={"jsonrpc": "2.0", "id": reply_id, **payload})
             require(response.status_code == status, f"{label}: expected HTTP {status}, got {response.status_code}")
-            observed["postedResponses"][label] = {"status": response.status_code}
-            if code is None:
+            outcome = {"status": response.status_code}
+            if status == 202:
                 require(response.content == b"", f"{label}: expected an empty acknowledgment")
+            elif status == 200:
+                frame = response.json()
+                require(frame == {"jsonrpc": "2.0", "id": reply_id, "result": {}}, f"{label}: expected a ping result")
+                outcome["result"] = frame["result"]
             else:
                 frame = response.json()
                 require(frame["jsonrpc"] == "2.0" and frame["id"] is None and frame["error"]["code"] == code,
                         f"{label}: invalid error envelope")
-                observed["postedResponses"][label]["code"] = frame["error"]["code"]
-            if version == LEGACY:
-                await initialize_legacy()
-            else:
-                await recovered()
+                outcome["code"] = frame["error"]["code"]
+            outcome["recoveryStatus"] = await initialize_legacy() if version == LEGACY else await recovered()
+            observed["postedResponses"][label] = outcome
 
         trusted = {"Host": "parity.invalid", "Origin": "https://parity.invalid"}
         await recovered(headers=trusted)
