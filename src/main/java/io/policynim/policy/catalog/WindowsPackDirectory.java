@@ -45,7 +45,7 @@ final class WindowsPackDirectory extends PackDirectory {
             int attributes = attributes(opened);
             if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
                     || !finalPath(opened).equals(root)) {
-                throw new IOException("The selected pack directory changed during inspection.");
+                throw new ReaderFailure(Failure.ROOT_CHANGED, null);
             }
         } catch (IOException | RuntimeException | Error failure) {
             closeHandle(opened);
@@ -91,12 +91,20 @@ final class WindowsPackDirectory extends PackDirectory {
     }
 
     @Override
+    void verifyRoot() throws IOException {
+        if (!root.equals(finalPath(rootHandle))) {
+            throw new ReaderFailure(Failure.ROOT_CHANGED, null);
+        }
+    }
+
+    @Override
     byte[] readRegular(Path physical) throws IOException {
         Pointer handle = openHandle(physical, GENERIC_READ, FILE_ATTRIBUTE_NORMAL);
         try {
             Path opened = finalPath(handle);
             requireMember(opened);
-            if (!root.equals(finalPath(rootHandle)) || !opened.equals(physical)
+            verifyRoot();
+            if (!opened.equals(physical)
                     || (attributes(handle) & FILE_ATTRIBUTE_DIRECTORY) != 0) {
                 throw new IOException("Couldn't validate the selected regular pack file.");
             }

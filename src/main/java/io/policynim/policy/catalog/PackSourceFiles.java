@@ -19,6 +19,8 @@ import java.util.TreeMap;
 
 /** Selects declared pack members before parsing their content and lists other Markdown by name. */
 final class PackSourceFiles {
+    private static final String MANIFEST_CHANGED = "pack.toml changed during inspection. Retry with stable policy files.";
+
     @FunctionalInterface
     interface Consumer {
         void accept(String path, String sourcePath, byte[] bytes, PolicyPackManifest manifest, PolicyPackManifest.Member member);
@@ -30,13 +32,15 @@ final class PackSourceFiles {
 
     static List<String> read(Path root, Consumer consumer) throws IOException {
         try (PackDirectory directory = PackDirectory.open(root)) {
+            PackDirectory.ResolvedFile manifestFile;
             byte[] manifestBytes;
             try {
-                manifestBytes = directory.read(directory.resolve("pack.toml"));
+                manifestFile = directory.resolve("pack.toml");
+                manifestBytes = directory.read(manifestFile);
             } catch (PackDirectory.OutsideRootException outside) {
                 throw new InvalidPolicyDocumentException("pack.toml must stay within the policy root.", outside);
             } catch (IOException error) {
-                throw new InvalidPolicyDocumentException("Couldn't read pack.toml as UTF-8 TOML.", error);
+                throw publicFailure(error, "Couldn't read pack.toml as UTF-8 TOML. Check file access and retry.");
             }
             PolicyPackManifest manifest = PolicyPackManifest.parse(manifestBytes);
             Set<Path> identities = new HashSet<>();
@@ -54,7 +58,7 @@ final class PackSourceFiles {
                 } catch (NoSuchFileException | PackDirectory.NotRegularFileException missing) {
                     throw new InvalidPolicyDocumentException(field + " doesn't exist.", missing);
                 } catch (IOException inaccessible) {
-                    throw new InvalidPolicyDocumentException(field + " must name a regular Markdown file within the pack.", inaccessible);
+                    throw publicFailure(inaccessible, field + " must name a regular Markdown file within the pack. Check paths and permissions.");
                 }
                 if (!identities.add(file.identity())) {
                     throw new InvalidPolicyDocumentException(field + " repeats a member.");
@@ -68,12 +72,42 @@ final class PackSourceFiles {
                 try {
                     content = directory.read(entry.getValue().file());
                 } catch (IOException unreadable) {
-                    throw SourceDirectory.readFailure(sourcePath, unreadable);
+                    throw publicFailure(unreadable, "Could not read policy document " + sourcePath + ". Check file access and retry.");
                 }
                 consumer.accept(path, sourcePath, content, manifest, entry.getValue().member());
             }
-            return unlistedMarkdown(root, directory, selected.keySet());
+            directory.verifyRoot();
+            List<String> unlisted;
+            try {
+                unlisted = unlistedMarkdown(root, directory, selected.keySet());
+            } catch (IOException failure) {
+                directory.verifyRoot();
+                throw failure;
+            }
+            verifyManifest(directory, manifestFile, manifestBytes);
+            return unlisted;
+        } catch (IOException failure) {
+            throw publicFailure(failure, "Couldn't inspect the selected policy pack. Check directory access and retry.");
         }
+    }
+
+    private static void verifyManifest(PackDirectory directory, PackDirectory.ResolvedFile original, byte[] bytes) {
+        try {
+            var current = directory.resolve("pack.toml");
+            if (!original.sameEntry(current) || !Arrays.equals(bytes, directory.read(current))) {
+                throw new InvalidPolicyDocumentException(MANIFEST_CHANGED);
+            }
+        } catch (IOException failure) {
+            if (failure instanceof PackDirectory.ReaderFailure reader && reader.reason == PackDirectory.Failure.ROOT_CHANGED) {
+                throw publicFailure(reader, MANIFEST_CHANGED);
+            }
+            throw new InvalidPolicyDocumentException(MANIFEST_CHANGED, failure);
+        }
+    }
+
+    private static InvalidPolicyDocumentException publicFailure(IOException error, String fallback) {
+        String message = error instanceof PackDirectory.ReaderFailure reader ? reader.reason.message : fallback;
+        return new InvalidPolicyDocumentException(message, error);
     }
 
     private static String normalizedPath(String raw, String field) {

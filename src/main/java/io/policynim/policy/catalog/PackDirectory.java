@@ -6,6 +6,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
@@ -29,7 +30,7 @@ abstract class PackDirectory implements AutoCloseable {
             return canonicalRoot.getFileSystem().getSeparator().equals("\\")
                 ? new WindowsPackDirectory(canonicalRoot) : new PosixPackDirectory(canonicalRoot);
         } catch (LinkageError | RuntimeException ex) {
-            throw new IOException("Couldn't initialize the policy pack file reader.", ex);
+            throw new ReaderFailure(Failure.UNAVAILABLE, ex);
         }
     }
 
@@ -37,15 +38,44 @@ abstract class PackDirectory implements AutoCloseable {
         private final PackDirectory directory;
         private final Path lexical;
         private final Path identity;
+        private final BasicFileAttributes attributes;
 
-        private ResolvedFile(PackDirectory directory, Path lexical, Path identity) {
+        private ResolvedFile(PackDirectory directory, Path lexical, Path identity, BasicFileAttributes attributes) {
             this.directory = directory;
             this.lexical = lexical;
             this.identity = identity;
+            this.attributes = attributes;
+        }
+
+        boolean sameEntry(ResolvedFile other) {
+            return directory == other.directory && identity.equals(other.identity)
+                && Objects.equals(attributes.fileKey(), other.attributes.fileKey())
+                && attributes.creationTime().equals(other.attributes.creationTime());
         }
 
         Path identity() {
             return identity;
+        }
+    }
+
+    enum Failure {
+        UNAVAILABLE("Couldn't initialize the policy pack file reader. Check native library access and retry."),
+        ROOT_CHANGED("The selected pack directory changed during inspection. Retry with a stable policy root."),
+        MEMBER_CHANGED("The selected pack member changed during inspection. Retry with stable policy files.");
+
+        final String message;
+
+        Failure(String message) {
+            this.message = message;
+        }
+    }
+
+    static final class ReaderFailure extends IOException {
+        final Failure reason;
+
+        ReaderFailure(Failure reason, Throwable cause) {
+            super(reason.message, cause);
+            this.reason = reason;
         }
     }
 
@@ -77,16 +107,18 @@ abstract class PackDirectory implements AutoCloseable {
         try {
             physical = lexical.toRealPath();
         } catch (NoSuchFileException missing) {
+            verifyRoot();
             requireMember(expandLinks(root, root.relativize(lexical), new HashSet<>()));
             throw missing;
         }
         requireMember(physical);
-        if (!Files.readAttributes(physical, BasicFileAttributes.class, NOFOLLOW_LINKS).isRegularFile()) {
+        var attributes = Files.readAttributes(physical, BasicFileAttributes.class, NOFOLLOW_LINKS);
+        if (!attributes.isRegularFile()) {
             throw new NotRegularFileException();
         }
         Path identity = memberIdentity(lexical, physical);
         requireMember(identity);
-        return new ResolvedFile(this, lexical, identity);
+        return new ResolvedFile(this, lexical, identity, attributes);
     }
 
     final byte[] read(ResolvedFile member) throws IOException {
@@ -94,10 +126,16 @@ abstract class PackDirectory implements AutoCloseable {
         if (member.directory != this) {
             throw new IOException("The resolved file belongs to a different policy pack.");
         }
-        Path physical = member.lexical.toRealPath();
+        Path physical;
+        try {
+            physical = member.lexical.toRealPath();
+        } catch (NoSuchFileException missing) {
+            verifyRoot();
+            throw missing;
+        }
         requireMember(physical);
         if (!member.identity.equals(memberIdentity(member.lexical, physical))) {
-            throw new IOException("The selected pack member changed during inspection.");
+            throw new ReaderFailure(Failure.MEMBER_CHANGED, null);
         }
         return readRegular(physical);
     }
@@ -158,6 +196,8 @@ abstract class PackDirectory implements AutoCloseable {
     String lexicalName(Path absoluteEntry) throws IOException {
         return root.relativize(absoluteEntry).toString().replace('\\', '/');
     }
+
+    abstract void verifyRoot() throws IOException;
 
     abstract byte[] readRegular(Path physical) throws IOException;
 

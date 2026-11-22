@@ -6,6 +6,7 @@ import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -46,18 +47,24 @@ final class PosixPackDirectory extends PackDirectory {
         rootFd = checked(CALLS.open(terminated(octets(rawRoot)), DIRECTORY));
         try {
             checked(POSIX_API.fstat(rootFd, rootStat));
-            checkRootIdentity();
+            verifyRoot();
         } catch (IOException | RuntimeException | Error failure) {
             checked(POSIX_API.close(rootFd));
             throw failure;
         }
     }
 
-    private void checkRootIdentity() throws IOException {
-        Map<String, Object> attributes = Files.readAttributes(root, "unix:dev,ino", NOFOLLOW_LINKS);
+    @Override
+    void verifyRoot() throws IOException {
+        Map<String, Object> attributes;
+        try {
+            attributes = Files.readAttributes(root, "unix:dev,ino", NOFOLLOW_LINKS);
+        } catch (NoSuchFileException missing) {
+            throw new ReaderFailure(Failure.ROOT_CHANGED, missing);
+        }
         if (((Number) attributes.get("dev")).longValue() != rootStat.dev()
                 || ((Number) attributes.get("ino")).longValue() != rootStat.ino()) {
-            throw new IOException("The selected pack directory changed during inspection.");
+            throw new ReaderFailure(Failure.ROOT_CHANGED, null);
         }
     }
 
@@ -124,7 +131,7 @@ final class PosixPackDirectory extends PackDirectory {
 
     @Override
     byte[] readRegular(Path physical) throws IOException {
-        checkRootIdentity();
+        verifyRoot();
         String[] components = rawPath(physical).substring(rawRoot.length() + 1).split("/");
         int directory = rootFd;
         try {
