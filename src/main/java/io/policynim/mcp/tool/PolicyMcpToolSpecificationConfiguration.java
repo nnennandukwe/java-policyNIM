@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 @Configuration(proxyBeanMethods = false)
 public class PolicyMcpToolSpecificationConfiguration {
@@ -36,9 +36,10 @@ public class PolicyMcpToolSpecificationConfiguration {
                         "topK", integerProperty("Maximum number of hits to return.")
                     )
                 ),
-                (exchange, arguments) -> invokeTool(
+                (exchange, request) -> invokeTool(
                     objectMapper,
-                    () -> tools.policySearch(
+                    request,
+                    arguments -> tools.policySearch(
                         requiredString(arguments, "query"),
                         optionalString(arguments, "domain"),
                         optionalInteger(arguments, "topK")
@@ -56,9 +57,10 @@ public class PolicyMcpToolSpecificationConfiguration {
                         "topK", integerProperty("Maximum number of evidence hits to use.")
                     )
                 ),
-                (exchange, arguments) -> invokeTool(
+                (exchange, request) -> invokeTool(
                     objectMapper,
-                    () -> tools.policyPreflight(
+                    request,
+                    arguments -> tools.policyPreflight(
                         requiredString(arguments, "task"),
                         optionalString(arguments, "domain"),
                         optionalInteger(arguments, "topK")
@@ -74,18 +76,15 @@ public class PolicyMcpToolSpecificationConfiguration {
         String requiredProperty,
         Map<String, Object> properties
     ) {
-        return McpSchema.Tool.builder()
-            .name(name)
-            .description(description)
-            .inputSchema(new McpSchema.JsonSchema(
-                "object",
-                properties,
-                List.of(requiredProperty),
-                false,
-                Map.of(),
-                Map.of()
-            ))
-            .build();
+        Map<String, Object> inputSchema = Map.of(
+            "type", "object",
+            "properties", properties,
+            "required", List.of(requiredProperty),
+            "additionalProperties", false,
+            "$defs", Map.of(),
+            "definitions", Map.of()
+        );
+        return McpSchema.Tool.builder(name, inputSchema).description(description).build();
     }
 
     private static Map<String, Object> stringProperty(String description) {
@@ -122,9 +121,14 @@ public class PolicyMcpToolSpecificationConfiguration {
         }
     }
 
-    private static McpSchema.CallToolResult invokeTool(ObjectMapper objectMapper, Supplier<Object> invocation) {
+    private static McpSchema.CallToolResult invokeTool(
+        ObjectMapper objectMapper,
+        McpSchema.CallToolRequest request,
+        Function<Map<String, Object>, Object> invocation
+    ) {
         try {
-            return toolResult(objectMapper, invocation.get());
+            Map<String, Object> arguments = request.arguments() == null ? Map.of() : request.arguments();
+            return toolResult(objectMapper, invocation.apply(arguments));
         }
         catch (McpToolInvocationException | IllegalArgumentException exception) {
             return toolError(exception.getMessage());

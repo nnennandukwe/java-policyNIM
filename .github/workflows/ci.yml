@@ -43,6 +43,12 @@ jobs:
           cache: maven
       - name: Run JDBC integration tests offline from live providers
         run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress test-compile -Dit.test=io.policynim.persistence.jdbc.*IT failsafe:integration-test failsafe:verify
+      - name: Verify installed JDBC search
+        run: |
+          export POLICYNIM_PROVIDER_NVIDIA_ENABLED=false
+          ./mvnw -B --no-transfer-progress -DskipTests package
+          sha256sum target/policynim.jar
+          ./mvnw -B --no-transfer-progress -Dit.test=PackagedJdbcSearchIT failsafe:integration-test failsafe:verify
 
   acceptance:
     name: acceptance tests
@@ -89,6 +95,7 @@ jobs:
       - name: Build jar package offline from live providers
         run: |
           POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
+          sha256sum target/policynim.jar
           jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
-      - name: Verify packaged stdio session
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT failsafe:integration-test failsafe:verify
+      - name: Verify packaged MCP sessions
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT failsafe:integration-test failsafe:verify

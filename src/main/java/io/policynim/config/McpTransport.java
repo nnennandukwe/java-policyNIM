@@ -22,8 +22,7 @@ public enum McpTransport {
                 .bind("policynim.mcp.transport", McpTransport.class)
                 .orElse(STREAMABLE_HTTP);
         }
-        // Spring AI's WebMVC condition matches literal false, ignoring case. Other false
-        // aliases bind as false in Boot but leave Spring AI using its stdio fallback.
+        // Preserve the explicit HTTP spelling accepted by the original Spring MVC transport.
         if ("false".equalsIgnoreCase(springStdio)) {
             return STREAMABLE_HTTP;
         }

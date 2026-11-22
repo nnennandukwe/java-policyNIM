@@ -50,11 +50,13 @@ Python module paths in the tables start at `src/policynim/` and test paths start
 
 ## Stdio launch work
 
-G01 has a [packaged stdio build plan](build-plans/stdio-launch.md). Its launch check covers framing, listener ownership and stdin closure for existing Java clients. The modern discovery and legacy version requirements still need separate cross-language evidence.
+The packaged stdio launch portion of G01 passed at merge `ea95f7c853feba21615b2d3bc8a579b00a71ab85`. The reviewed head was `8b944f2ffce68a01c0de8853af8685e57584d3a2`, and both commits have the same tree. The fresh merge jar (SHA-256 `0fa36e383c5bfdace25e89684e3b4bbc833fea28465d36dcd158acf4c02433cb`) passed both packaged launch tests with an occupied port and clean exit after EOF. The same Python MCP SDK 2.2.0 legacy client listed tools without a parse error on the merge jar and on Python `fcc5322`. Java negotiated `2024-11-05` and Python negotiated `2025-11-25`. The five post-merge jobs passed, including the JDBC and package lanes. G01 remains open for the [negotiation build](build-plans/mcp-negotiation.md). [Launch plan](build-plans/stdio-launch.md) · [PR #12](https://github.com/nnennandukwe/java-policyNIM/pull/12) · [Post-merge run](https://github.com/nnennandukwe/java-policyNIM/actions/runs/44972586171)
 
 ## Baseline observations
 
 At the pinned Python revision, a fresh test environment installed from the lockfile passed 171 tests across `test_mcp_protocol`, `test_grounded_mcp`, `test_extractive_guidance`, `test_grounded_generation_schema`, `test_preflight_guidance_integrity`, `test_compiler_service`, and `test_policy_evidence_trace_service`. The protocol suite opens real stdio subprocesses and loopback HTTP listeners with offline service fixtures.
+
+With the HTTP protocol explicitly set to `SSE`, the Java starting jar also served its two tools to a bearer-authenticated client through the `/sse` endpoint event and `/mcp/message`. With `STATELESS`, it initialized on `/mcp` without a session ID and listed zero tools. These Java compatibility cases accompany the Python transport checks. [Negotiation Build Plan](build-plans/mcp-negotiation.md)
 
 A clean Java archive built with `POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package`. Python MCP SDK 2.2.0 connected to that jar over loopback HTTP with Java's default noop storage. Both auto and forced legacy negotiated `2025-06-18` and listed only `policy_search` and `policy_preflight`. Both tools omitted output schemas and annotations. This establishes discovery at the Java starting revision. The G01–G04 proof still requires working canonical calls.
 

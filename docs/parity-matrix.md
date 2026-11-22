@@ -32,7 +32,7 @@ One Python MCP SDK 2.2.0 client launched each stdio server with an empty home, n
 | Search with `top_k=0` | Input validation rejected the argument | The noop storage readiness check returned bootstrap instructions |
 | Protocol stream | The SDK read protocol frames without parse errors | The SDK recovered from repeated JSON-RPC parse failures caused by startup output |
 
-In a separate jar run, Java stdio opened a TCP listener and remained alive five seconds after stdin closed. Explicit non-web mode, a disabled banner and stderr logging allowed a clean stream and exit. These are baseline measurements. The shipped launch defaults still need the G01 fix. At the Python pin, 315 offline tests covering protocol, grounded MCP and policy generations passed. [More transport observations](parity-grounding.md#baseline-observations)
+In a separate jar run, Java stdio opened a TCP listener and remained alive five seconds after stdin closed. Explicit non-web mode, a disabled banner and stderr logging allowed a clean stream and exit. PR #12 corrected the packaged launch defaults at `ea95f7c853feba21615b2d3bc8a579b00a71ab85`. G01 still requires protocol negotiation and data-backed calls. At the Python pin, 315 offline tests covering protocol, grounded MCP and policy generations passed. [More transport observations](parity-grounding.md#baseline-observations)
 
 ## Evidence to record for a completed row
 

@@ -19,6 +19,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.Attributes;
+import java.util.jar.JarFile;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -68,6 +70,12 @@ class PackagedStdioIT {
                 send(stdin, INITIALIZE);
                 JsonNode initialized = readers.submit(() -> readReply(stdout, 1)).get(45, TimeUnit.SECONDS);
                 assertEquals("2024-11-05", initialized.path("protocolVersion").textValue());
+
+                try (var archive = new JarFile(jar.toFile())) {
+                    String version = archive.getManifest().getMainAttributes().getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+                    assertTrue(version != null && !version.isBlank(), "The jar must declare its implementation version.");
+                    assertEquals(version, initialized.path("serverInfo").path("version").textValue());
+                }
 
                 send(stdin, INITIALIZED);
                 send(stdin, LIST_TOOLS);
