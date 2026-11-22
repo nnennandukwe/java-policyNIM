@@ -1,12 +1,14 @@
 package io.policynim.policy.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,6 +61,44 @@ class CapturedPackTests {
         assertThat(first.relativePath()).isEqualTo("http-errors.md");
         assertThat(first.source().document().sourcePath()).isEqualTo("api/http-errors.md");
         assertThat(first.revisionDigest()).isEqualTo("sha256:134604f4934c4662656e98e488b4ea0607fea7e6ccea2db2f0197fdaa35c8b5a");
+    }
+
+    @Test
+    void keepsTheProfileCatalogStableAfterCallersMutateInputsAndReturnedViews() throws Exception {
+        var expected = new ObjectMapper().readTree(getClass().getResource("/parity/catalog/profile-decisions.json"))
+            .get("catalog");
+        var entries = new ArrayList<ObjectNode>();
+        expected.get("policies").forEach(entry -> entries.add(entry.deepCopy()));
+        var pins = new ArrayList<ObjectNode>();
+        expected.get("pack_pins").forEach(pin -> pins.add(pin.deepCopy()));
+        var catalog = SourceCatalog.profiled(expected.get("profile_id").textValue(), expected.get("profile_digest").textValue(),
+            pins, entries.reversed(), expected.get("effective_count").intValue());
+
+        entries.getFirst().removeAll();
+        pins.getFirst().removeAll();
+        var listing = catalog.list();
+        ((ObjectNode) listing.at("/pack_pins/0")).removeAll();
+        ((ObjectNode) listing.at("/policies/0/policy")).removeAll();
+        catalog.show("A").put("state", "active");
+        assertThat(catalog.list()).isEqualTo(expected);
+        assertThat(catalog.validate().get("catalog_digest")).isEqualTo(expected.get("digest"));
+        assertThat(catalog.show("A").get("state").textValue()).isEqualTo("replaced");
+    }
+
+    @Test
+    void reportsAnUnavailableSelectedDirectoryWithoutExposingItsPathAndCanRetry() throws Exception {
+        var fixture = new ObjectMapper().readTree(getClass().getResource("/parity/catalog/explicit-logging.json"));
+        Path selected = Files.createDirectory(root.resolve("local-team"));
+        var location = PackLocation.resolve(root.resolve("profile.toml"), "local-team");
+        Files.delete(selected);
+        Files.writeString(selected, "Directory is unavailable.");
+        assertThatThrownBy(() -> SourceCatalog.capturePack(location)).isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageNotContaining(root.toString()).hasMessageNotContaining("local-team");
+        Files.delete(selected);
+        Files.createDirectory(selected);
+        Files.writeString(selected.resolve("pack.toml"), fixture.get("manifest").textValue());
+        Files.writeString(selected.resolve("policy.md"), fixture.get("member").textValue());
+        assertThat(SourceCatalog.capturePack(location).digest()).isEqualTo(fixture.at("/catalog/digest").textValue());
     }
 
     @Test

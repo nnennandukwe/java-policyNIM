@@ -39,6 +39,8 @@ final class PackSourceFiles {
             try {
                 manifestFile = directory.resolve("pack.toml");
                 manifestBytes = directory.read(manifestFile);
+            } catch (NoSuchFileException absent) {
+                throw PackLocation.missingManifest();
             } catch (PackDirectory.OutsideRootException outside) {
                 throw new InvalidPolicyDocumentException("pack.toml must stay within the policy root.", outside);
             } catch (IOException error) {

@@ -12,6 +12,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.NavigableMap;
@@ -69,7 +70,7 @@ public final class SourceCatalog {
                 throw new InvalidPolicyDocumentException("The source catalog has no policies. "
                     + "Check that the directory passed to --corpus-root contains .md policy files.");
             }
-            return standalone(builder.members.values().stream().toList(), unlisted);
+            return standalone(builder.members.values(), unlisted);
         } catch (IOException | DirectoryIteratorException error) {
             throw new InvalidPolicyDocumentException("Couldn't inspect policy root " + selected + ".", error);
         }
@@ -83,24 +84,22 @@ public final class SourceCatalog {
         return standalone(captureBundled(PackLocation.Bundled.BASELINE, resources).members(), List.of());
     }
 
-    private static SourceCatalog standalone(List<CapturedPack.Member> members, List<String> unlisted) {
+    private static SourceCatalog standalone(Collection<CapturedPack.Member> members, List<String> unlisted) {
         return new SourceCatalog(members.stream().map(CapturedPack.Member::standaloneEntry).toList(),
             unlisted, null, null, List.of(), members.size());
     }
 
     static CapturedPack capturePack(PackLocation location) {
-        if (location instanceof PackLocation.Bundled bundled) {
-            return captureBundled(bundled, SourceCatalog.class::getResourceAsStream);
-        }
-        Path root = ((PackLocation.Local) location).realRoot();
+        return switch (location) {
+            case PackLocation.Bundled bundled -> captureBundled(bundled, SourceCatalog.class::getResourceAsStream);
+            case PackLocation.Local local -> captureLocal(local.realRoot());
+        };
+    }
+
+    private static CapturedPack captureLocal(Path canonicalRoot) {
+        var builder = new Builder();
         try {
-            var directory = SourceDirectory.open(root);
-            if (!directory.hasManifest()) {
-                throw PackLocation.missingManifest();
-            }
-            var builder = new Builder();
-            var read = PackSourceFiles.read(directory.root(), builder::addPackMember);
-            directory.verifySelection(true);
+            var read = PackSourceFiles.read(canonicalRoot, builder::addPackMember);
             return builder.capture(read.manifest());
         } catch (IOException | DirectoryIteratorException error) {
             throw new InvalidPolicyDocumentException("Couldn't inspect the selected policy pack. Check directory access and retry.", error);
