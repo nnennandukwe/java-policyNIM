@@ -41,6 +41,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Build executable jar for JDBC clients
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
       - name: Run JDBC integration tests offline from live providers
         run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress test-compile -Dit.test=io.policynim.persistence.jdbc.*IT failsafe:integration-test failsafe:verify
 
@@ -90,5 +92,5 @@ jobs:
         run: |
           POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
           jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
-      - name: Verify packaged stdio session
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT failsafe:integration-test failsafe:verify
+      - name: Verify packaged MCP sessions
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT failsafe:integration-test failsafe:verify

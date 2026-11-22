@@ -10,7 +10,7 @@ import org.testcontainers.utility.DockerImageName;
 public class PostgresTestContainerConfiguration {
 
     @Bean
-    PostgreSQLContainer<?> postgresContainer() {
+    public static PostgreSQLContainer<?> postgresContainer() {
         return new PostgreSQLContainer<>(
             DockerImageName.parse("pgvector/pgvector:0.8.2-pg16").asCompatibleSubstituteFor("postgres")
         );
