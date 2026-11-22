@@ -19,7 +19,7 @@ class LegacySseServletTests {
     @Test
     void shutdownWaitsForTheSdkToRegisterAnOpeningStream() throws Exception {
         var servlet = new LegacySseServlet(HttpServletSseServerTransportProvider.builder()
-            .messageEndpoint("/mcp/message").build());
+            .messageEndpoint("/mcp/message").build(), "/sse", "/mcp/message");
         var connected = new MockHttpServletRequest("GET", "/sse");
         connected.setAsyncSupported(true);
         var headersFlushed = new CountDownLatch(1);

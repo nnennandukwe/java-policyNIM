@@ -33,33 +33,25 @@ class LegacyAlternateHttpConfiguration {
     @Bean(destroyMethod = "destroy")
     @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
     LegacySseServlet legacySseTransport(Environment environment) {
+        String events = environment.getProperty(PREFIX + "sse-endpoint", "/sse");
+        String messages = environment.getProperty(PREFIX + "sse-message-endpoint", "/mcp/message");
         var transport = HttpServletSseServerTransportProvider.builder()
             .jsonMapper(new JacksonMcpJsonMapper(LegacyTransportJson.objectMapper()))
             .baseUrl(environment.getProperty(PREFIX + "base-url", ""))
-            .sseEndpoint(sseEndpoint(environment))
-            .messageEndpoint(sseMessageEndpoint(environment))
+            .sseEndpoint(events)
+            .messageEndpoint(messages)
             .keepAliveInterval(Binder.get(environment).bind(PREFIX + "keep-alive-interval", Duration.class).orElse(null))
             .build();
-        return new LegacySseServlet(transport);
+        return new LegacySseServlet(transport, events, messages);
     }
 
     @Bean
     @ConditionalOnProperty(name = LegacyHttpProtocol.PROPERTY, havingValue = "SSE")
-    ServletRegistrationBean<LegacySseServlet> legacySseServlet(
-        LegacySseServlet transport, Environment environment
-    ) {
-        var registration = new ServletRegistrationBean<>(transport, sseEndpoint(environment), sseMessageEndpoint(environment));
+    ServletRegistrationBean<LegacySseServlet> legacySseServlet(LegacySseServlet transport) {
+        var registration = new ServletRegistrationBean<>(transport, transport.urlMappings());
         registration.setAsyncSupported(true);
         registration.setName("policyNimSse");
         return registration;
-    }
-
-    private static String sseEndpoint(Environment environment) {
-        return environment.getProperty(PREFIX + "sse-endpoint", "/sse");
-    }
-
-    private static String sseMessageEndpoint(Environment environment) {
-        return environment.getProperty(PREFIX + "sse-message-endpoint", "/mcp/message");
     }
 
     @Bean

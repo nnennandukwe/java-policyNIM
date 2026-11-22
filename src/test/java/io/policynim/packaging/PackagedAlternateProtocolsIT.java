@@ -76,6 +76,16 @@ class PackagedAlternateProtocolsIT {
             assertThat(denied.statusCode()).isEqualTo(requireToken ? 401 : 403);
             var messages = origin.resolve(requireToken ? "/mcp/message" : "/test-mcp/messages");
             String bearer = requireToken ? token : null;
+            for (var route : Map.of(origin.resolve(ssePath), "GET", messages, "POST").entrySet()) {
+                var head = request(route.getKey()).method("HEAD", HttpRequest.BodyPublishers.noBody());
+                if (requireToken) {
+                    assertThat(http.send(head.build(), HttpResponse.BodyHandlers.discarding()).statusCode()).isEqualTo(401);
+                    head.header("Authorization", "Bearer " + token);
+                }
+                var unsupported = http.send(head.build(), HttpResponse.BodyHandlers.discarding());
+                assertThat(unsupported.statusCode()).isEqualTo(405);
+                assertThat(unsupported.headers().firstValue("Allow")).contains(route.getValue());
+            }
             assertTransportError(post(http, messages, INITIALIZE, bearer, null), 400, -32601);
             assertTransportError(post(http, messages.resolve(messages.getPath() + "?sessionId=" + UUID.randomUUID()),
                 INITIALIZE, bearer, null), 404, -32603);
