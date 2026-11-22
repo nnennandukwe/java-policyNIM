@@ -80,7 +80,7 @@ public final class SourceCatalogCommand {
             JsonNode policy = view.get("policy");
             output.printf("%s: %s%nScope: source; generation: unknown%nSource: %s; state: %s%n",
                 policy.get("policy_id").textValue(), policy.get("title").textValue(),
-                view.get("path").textValue(), view.get("state").textValue());
+                pathForDisplay(view.get("path").textValue()), view.get("state").textValue());
             JsonNode provenance = policy.get("provenance");
             output.printf("Revision: %s%nGrounding: %s%n", provenance.get("content_digest").textValue(),
                 provenance.get("grounding_kind").textValue());
@@ -91,15 +91,46 @@ public final class SourceCatalogCommand {
         output.printf("%s: %d policies; %s%n", validate ? "Valid source catalog" : "Source catalog",
             view.get("effective_count").intValue(), view.get(validate ? "catalog_digest" : "digest").textValue());
         output.println("Generation: unknown (source inspection only)");
+        JsonNode unlisted = view.get("unlisted_markdown");
         if (validate) {
             output.println("Validation checks structure and declared metadata; it doesn't certify compliance.");
+            if (!unlisted.isEmpty()) {
+                List<String> paths = new ArrayList<>();
+                unlisted.forEach(path -> paths.add(pathForDisplay(path.textValue())));
+                output.println("Unlisted Markdown (not selected): " + String.join(", ", paths));
+            }
             return;
         }
         for (JsonNode entry : view.get("policies")) {
             JsonNode policy = entry.get("policy");
-            output.printf("%s  %s  %s  legacy directory (pack unknown)  %s%n", policy.get("policy_id").textValue(),
-                entry.get("state").textValue(), policy.get("domain").textValue(), policy.get("title").textValue());
+            JsonNode provenance = policy.get("provenance");
+            String pack = provenance.get("pack_id").isNull() ? "legacy directory (pack unknown)"
+                : provenance.get("pack_id").textValue() + "@" + provenance.get("pack_version").textValue();
+            output.printf("%s  %s  %s  %s  %s%n", policy.get("policy_id").textValue(), entry.get("state").textValue(),
+                policy.get("domain").textValue(), pack, policy.get("title").textValue());
         }
+        if (!unlisted.isEmpty()) {
+            output.printf("Unlisted Markdown: %d file(s) aren't selected. "
+                + "Run `java -jar <jar> policies validate --source --corpus-root=<path> --format json` for their paths.%n",
+                unlisted.size());
+        }
+    }
+
+    private static String pathForDisplay(String path) {
+        var display = new StringBuilder(path.length());
+        path.codePoints().forEach(point -> {
+            switch (Character.getType(point)) {
+                case Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR ->
+                    display.append((point <= Character.MAX_VALUE ? "\\u%04x" : "\\U%08x").formatted(point));
+                default -> {
+                    if (point == '\\') {
+                        display.append('\\');
+                    }
+                    display.appendCodePoint(point);
+                }
+            }
+        });
+        return display.toString();
     }
 
     private record Options(String command, String policyId, Path root, boolean json, boolean help) {

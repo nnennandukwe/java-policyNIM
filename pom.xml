@@ -22,6 +22,11 @@
         <spring-ai.version>1.1.4</spring-ai.version>
         <mcp-sdk.version>2.2.0</mcp-sdk.version>
         <commonmark.version>0.32.0</commonmark.version>
+        <tomlj.version>2.2.0</tomlj.version>
+        <weburl.version>0.3.0</weburl.version>
+        <jnr-posix.version>3.2.8</jnr-posix.version>
+        <jnr-ffi.version>2.3.7</jnr-ffi.version>
+        <jnr-constants.version>0.11.4</jnr-constants.version>
         <archunit.version>1.4.1</archunit.version>
         <cucumber.version>7.22.1</cucumber.version>
         <pgvector-java.version>0.1.6</pgvector-java.version>
@@ -109,6 +114,31 @@
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>
             <version>${commonmark.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tomlj</groupId>
+            <artifactId>tomlj</artifactId>
+            <version>${tomlj.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glavo</groupId>
+            <artifactId>weburl</artifactId>
+            <version>${weburl.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jnr</groupId>
+            <artifactId>jnr-posix</artifactId>
+            <version>${jnr-posix.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jnr</groupId>
+            <artifactId>jnr-ffi</artifactId>
+            <version>${jnr-ffi.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.jnr</groupId>
+            <artifactId>jnr-constants</artifactId>
+            <version>${jnr-constants.version}</version>
         </dependency>
         <dependency>
             <groupId>org.yaml</groupId>

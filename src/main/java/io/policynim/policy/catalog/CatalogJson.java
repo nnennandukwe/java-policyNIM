@@ -27,8 +27,12 @@ final class CatalogJson {
         return MAPPER.createObjectNode();
     }
 
-    static ObjectNode entry(ParsedPolicyDocument doc, String path, byte[] content) {
-        ObjectNode policy = metadata(doc.metadata(), hex(sha256().digest(content)));
+    static String contentDigest(byte[] content) {
+        return hex(sha256().digest(content));
+    }
+
+    static ObjectNode entry(ParsedPolicyDocument doc, String path, ObjectNode provenance) {
+        ObjectNode policy = metadata(doc.metadata(), provenance);
         MessageDigest target = sha256();
         target.update(compact(policy));
         target.update((byte) '\n');
@@ -42,18 +46,23 @@ final class CatalogJson {
         return entry.put("body", doc.body());
     }
 
-    private static ObjectNode metadata(PolicyMetadata metadata, String contentDigest) {
+    private static ObjectNode metadata(PolicyMetadata metadata, ObjectNode provenance) {
         ObjectNode policy = object().put("policy_id", metadata.policyId()).put("title", metadata.title())
             .put("doc_type", metadata.docType()).put("domain", metadata.domain());
         var tags = policy.putArray("tags");
         metadata.tags().forEach(tags::add);
         var groundedIn = policy.putArray("grounded_in");
         metadata.groundedIn().forEach(groundedIn::add);
-        ObjectNode provenance = policy.putObject("provenance").put("content_digest", contentDigest)
+        policy.set("provenance", provenance);
+        return policy;
+    }
+
+    static ObjectNode legacyProvenance(String contentDigest) {
+        ObjectNode provenance = object().put("content_digest", contentDigest)
             .putNull("pack_id").putNull("pack_version").put("requirement_level", "unknown");
         provenance.putArray("applicability");
         provenance.put("grounding_kind", "legacy_unknown").putArray("sources");
-        return policy;
+        return provenance;
     }
 
     static String catalogDigest(Iterable<ObjectNode> entries) {

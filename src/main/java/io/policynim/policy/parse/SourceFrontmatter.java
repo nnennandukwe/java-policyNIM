@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import static io.policynim.policy.parse.SourceMarkdownParser.strip;
@@ -12,6 +13,7 @@ import static io.policynim.policy.parse.SourceMarkdownParser.strip;
 final class SourceFrontmatter {
     static final Pattern FIELD = Pattern.compile("([A-Za-z0-9_-]+):(.*)", Pattern.DOTALL);
     private static final Pattern LIST_ITEM = Pattern.compile("(?U)^[\\s\\u001c-\\u001f]*-[\\s\\u001c-\\u001f]+");
+    private static final Set<String> PACK_FIELDS = Set.of("policy_id", "title", "doc_type", "domain", "tags", "grounded_in");
     private final String sourcePath;
     private final Map<String, Object> fields = new HashMap<>();
     private List<SourceMarkdownParser.RuntimeRule> rules = List.of();
@@ -57,6 +59,15 @@ final class SourceFrontmatter {
                 }
                 fields.put(key, values.isEmpty() ? "" : values);
             }
+        }
+    }
+
+    void validatePackFields() {
+        // Runtime rules are parsed into their own field during read().
+        List<String> unknown = fields.keySet().stream().filter(key -> !PACK_FIELDS.contains(key)).sorted().toList();
+        if (!unknown.isEmpty()) {
+            throw new InvalidPolicyDocumentException("Policy document " + sourcePath + " has unsupported frontmatter keys: "
+                + String.join(", ", unknown) + ". Put provenance in pack.toml; composition settings aren't supported in this manifest schema.");
         }
     }
 

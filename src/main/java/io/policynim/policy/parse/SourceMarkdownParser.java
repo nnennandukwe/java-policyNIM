@@ -32,7 +32,15 @@ public final class SourceMarkdownParser {
         return parseSource(sourcePath, text).document();
     }
 
+    public ParsedSource parsePackMember(String sourcePath, String text) {
+        return parseSource(sourcePath, text, true);
+    }
+
     public ParsedSource parseSource(String sourcePath, String text) {
+        return parseSource(sourcePath, text, false);
+    }
+
+    private ParsedSource parseSource(String sourcePath, String text, boolean packMember) {
         int first = 0;
         while (first < text.length() && text.charAt(first) == '\ufeff') {
             first++;
@@ -55,6 +63,9 @@ public final class SourceMarkdownParser {
                 throw new InvalidPolicyDocumentException("Policy document " + sourcePath + " starts frontmatter but never closes it.");
             }
             metadata.read(lines.subList(1, end));
+            if (packMember) {
+                metadata.validatePackFields();
+            }
             boolean finalLf = body.endsWith("\n");
             body = String.join("\n", lines.subList(end + 1, lines.size()));
             if (!body.isEmpty() && finalLf) {
@@ -135,8 +146,8 @@ public final class SourceMarkdownParser {
             ? upper.substring(0, firstWidth) + upper.substring(firstWidth).toLowerCase(Locale.ROOT) : upper;
     }
 
-    // Python str.strip includes nonbreaking spaces and U+0085 in addition to Java whitespace.
-    static String strip(String value) {
+    /** Trims source-format whitespace, including nonbreaking spaces and U+0085. */
+    public static String strip(String value) {
         int start = 0;
         int end = value.length();
         while (start < end && whitespace(value.charAt(start))) {

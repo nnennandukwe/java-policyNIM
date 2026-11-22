@@ -1,0 +1,12 @@
+Manifest parser and source URL dependencies
+
+Tomlj 2.2.0 (org.tomlj:tomlj)
+Project: https://github.com/tomlj/tomlj
+License: Apache License 2.0, included in Apache-2.0.txt.
+Tomlj bundles ANTLR 4.13.2. Its license and copyright notice appear in ANTLR.txt.
+
+WebURL 0.3.0 (org.glavo:weburl)
+Copyright 2026 Glavo
+Project: https://github.com/Glavo/weburl-java
+License: Apache License 2.0, included in Apache-2.0.txt.
+WebURL includes Unicode 17.0 IDNA data. Its license and copyright notice appear in Unicode.txt.

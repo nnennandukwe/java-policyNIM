@@ -15,6 +15,79 @@ class SourceCatalogTests {
     @TempDir Path temporary;
 
     @Test
+    void validatesDeclaredIdsAndPackOwnedMetadataBeforePublishingAnyEntries() throws Exception {
+        Path root = Files.createDirectory(temporary.resolve("policies"));
+        Path policy = root.resolve("rule.md");
+        Files.writeString(policy, "---\npolicy_id: OTHER\n---\n# Rule\n");
+        Files.writeString(root.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "rules"
+            version = "1.0.0"
+            [[policies]]
+            policy_id = "RULE"
+            path = "rule.md"
+            """);
+        assertThatThrownBy(() -> SourceCatalog.read(root)).isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("pack.toml policy_id for rule.md doesn't match its Markdown policy_id.");
+
+        Files.writeString(policy, "---\nprofile: note\nlicense: note\n---\n# Rule\n");
+        assertThatThrownBy(() -> SourceCatalog.read(root)).isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessageContaining("policies/rule.md has unsupported frontmatter keys: license, profile")
+            .hasMessageContaining("Put provenance in pack.toml");
+        Files.writeString(policy, "# Rule\n");
+        assertThat(SourceCatalog.read(root).show("RULE").path("body").textValue()).isEqualTo("# Rule\n");
+
+        Files.delete(root.resolve("pack.toml"));
+        Files.writeString(policy, "---\nprofile: note\nlicense: note\n---\n# Rule\n");
+        assertThat(SourceCatalog.read(root).show("RULE").at("/policy/provenance/pack_id").isNull()).isTrue();
+    }
+
+    @Test
+    void reportsANonFileMemberAtItsDeclaredLocationAndRereadsTheCorrection() throws Exception {
+        Path root = Files.createDirectory(temporary.resolve("policies"));
+        Path member = Files.createDirectory(root.resolve("rule.md"));
+        Files.writeString(root.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "rules"
+            version = "1.0.0"
+            [[policies]]
+            policy_id = "RULE"
+            path = "rule.md"
+            """);
+        assertThatThrownBy(() -> SourceCatalog.read(root)).isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("pack.toml policies.0.path doesn't exist.");
+        Files.delete(member);
+        Files.writeString(member, "# Rule\n");
+        assertThat(SourceCatalog.read(root).show("RULE").path("path").textValue()).isEqualTo("rule.md");
+    }
+
+    @Test
+    void selectsOnlyDeclaredMembersAndKeepsTheirLexicalPaths() throws Exception {
+        Path root = Files.createDirectory(temporary.resolve("policies"));
+        Files.writeString(root.resolve("rule.md"), "# Rule\n");
+        Files.write(root.resolve("draft.md"), new byte[] {(byte) 0xff});
+        Files.writeString(root.resolve("TEMPLATE.md"), "Author template");
+        Files.writeString(root.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "team.rules"
+            version = "2.1.0"
+            [[policies]]
+            policy_id = "RULE"
+            path = "./rule.md"
+            requirement_level = "recommended"
+            """);
+
+        var catalog = SourceCatalog.read(root);
+        var view = catalog.show("RULE");
+        assertThat(view.path("path").textValue()).isEqualTo("rule.md");
+        assertThat(view.at("/policy/provenance/pack_id").textValue()).isEqualTo("team.rules");
+        assertThat(view.at("/policy/provenance/requirement_level").textValue()).isEqualTo("recommended");
+        assertThat(catalog.validate().path("effective_count").intValue()).isOne();
+        assertThat(catalog.validate().path("unlisted_markdown").toString()).isEqualTo("[\"draft.md\"]");
+        assertThat(catalog.list().path("unlisted_markdown")).isEqualTo(catalog.validate().path("unlisted_markdown"));
+    }
+
+    @Test
     void publishesTheCatalogTargetAndContentDigestsOfTheSameMarkdown() throws Exception {
         Path root = temporary.resolve("policies");
         Files.createDirectories(root.resolve("api"));
