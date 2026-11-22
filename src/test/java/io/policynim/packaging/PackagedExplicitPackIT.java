@@ -26,6 +26,7 @@ import java.util.jar.JarFile;
 import java.util.zip.ZipInputStream;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -35,6 +36,28 @@ class PackagedExplicitPackIT {
 
     private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     private static final String CREDENTIAL = "SYNTHETIC-PACK-MARKER-673";
+
+    @Test
+    void jarIncludesTheReaderAndParserDistributionNotices() throws Exception {
+        var notices = List.of(
+            "pack-reader/README.md", "pack-reader/asm.txt", "pack-reader/jffi.txt", "pack-reader/libffi.txt",
+            "pack-reader/jnr-a64asm.txt", "pack-reader/jnr-x86asm.txt", "pack-reader/jnr-ffi-and-constants.txt",
+            "pack-reader/jnr-posix.txt", "pack-reader/third-party-notices.txt",
+            "policy-pack-parsers/Apache-2.0.txt", "policy-pack-parsers/ANTLR.txt",
+            "policy-pack-parsers/Unicode.txt", "policy-pack-parsers/NOTICE.txt");
+        try (var jar = new JarFile(Path.of("target", "policynim.jar").toFile())) {
+            for (String name : notices) {
+                String path = "META-INF/licenses/" + name;
+                var entry = jar.getEntry(path);
+                assertNotNull(entry, path);
+                try (var expected = getClass().getResourceAsStream("/" + path);
+                     var packaged = jar.getInputStream(entry)) {
+                    assertNotNull(expected, path);
+                    assertArrayEquals(expected.readAllBytes(), packaged.readAllBytes(), path);
+                }
+            }
+        }
+    }
 
     @Test
     void jarContainsPackDependenciesAndNativeBinaries() throws Exception {
