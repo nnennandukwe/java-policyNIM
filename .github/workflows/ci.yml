@@ -98,7 +98,7 @@ jobs:
           sha256sum target/policynim.jar
           jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
       - name: Verify packaged MCP sessions and source catalog commands
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT,GroundedHttpIT,GroundedStdioIT,PackagedSourceCatalogIT,PackagedExplicitPackIT,PackagedBundledAssetsIT failsafe:integration-test failsafe:verify
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT,GroundedHttpIT,GroundedStdioIT,PackagedSourceCatalogIT,PackagedExplicitPackIT,PackagedBundledAssetsIT,PackagedReadOnlyProfilesIT failsafe:integration-test failsafe:verify
       - name: Check out the Python PolicyNIM reference
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -129,5 +129,10 @@ jobs:
       - name: Compare the installed wheel, jar and nonroot image with the pinned bundle
         run: |
           build/parity-python/.venv/bin/python -B src/test/parity/bundled_source.py \
+            --jar target/policynim.jar --reference-root build/parity-python \
+            --image "$(cat "$RUNNER_TEMP/policynim-image-id")"
+      - name: Compare read-only profile commands across the installed wheel, jar and image
+        run: |
+          build/parity-python/.venv/bin/python -B src/test/parity/read_only_profiles.py \
             --jar target/policynim.jar --reference-root build/parity-python \
             --image "$(cat "$RUNNER_TEMP/policynim-image-id")"
