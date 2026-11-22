@@ -1,6 +1,7 @@
 package io.policynim.mcp.transport;
 
 import io.modelcontextprotocol.server.McpServer;
+import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTransportProvider;
 import io.modelcontextprotocol.spec.HttpHeaders;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStreamableServerSession;
@@ -20,7 +21,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -145,6 +149,47 @@ class SessionHttpServletTests {
         finally {
             server.closeGracefully();
         }
+    }
+
+    @Test
+    void rejectedRequestsReuseTheSdkTransportAndTheNextInitializeStillIssuesASession() throws Exception {
+        var transport = new SessionHttpServlet("/mcp", Duration.ofMinutes(30), null, false);
+        var server = McpServer.sync(transport).serverInfo("fixture", "1").build();
+        String list = """
+            {"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
+            """;
+        try (var builders = mockStatic(HttpServletStreamableServerTransportProvider.class, CALLS_REAL_METHODS)) {
+            assertThat(statusFor(transport, "unknown")).isEqualTo(404);
+            var unknown = post(transport, list, "unknown");
+            assertThat(unknown.getStatus()).isEqualTo(404);
+            assertThat(unknown.getContentAsString()).contains("\"code\":-32603").doesNotContain("stackTrace", "unknown");
+            var missing = post(transport, list, null);
+            assertThat(missing.getStatus()).isEqualTo(400);
+            assertThat(missing.getContentAsString()).contains("\"code\":-32601");
+            var malformed = post(transport, "{", "unknown");
+            assertThat(malformed.getStatus()).isEqualTo(400);
+            assertThat(malformed.getContentAsString()).contains("\"code\":-32600").doesNotContain("stackTrace");
+            builders.verify(HttpServletStreamableServerTransportProvider::builder, never());
+
+            var initialized = post(transport, INITIALIZE, "unknown");
+            assertThat(initialized.getStatus()).isEqualTo(200);
+            assertThat(initialized.getHeader(HttpHeaders.MCP_SESSION_ID)).isNotBlank().isNotEqualTo("unknown");
+            builders.verify(HttpServletStreamableServerTransportProvider::builder);
+        }
+        finally {
+            server.closeGracefully();
+        }
+    }
+
+    private static MockHttpServletResponse post(SessionHttpServlet transport, String body, String session) throws Exception {
+        var request = initializeRequest();
+        request.setContent(body.getBytes(StandardCharsets.UTF_8));
+        if (session != null) {
+            request.addHeader(HttpHeaders.MCP_SESSION_ID, session);
+        }
+        var response = new MockHttpServletResponse();
+        transport.service(request, response);
+        return response;
     }
 
     private static McpStreamableServerSession session(String id) {

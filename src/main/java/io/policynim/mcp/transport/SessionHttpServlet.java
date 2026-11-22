@@ -7,7 +7,6 @@ import io.modelcontextprotocol.server.transport.HttpServletStreamableServerTrans
 import io.modelcontextprotocol.spec.HttpHeaders;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpSession;
-import io.modelcontextprotocol.spec.ProtocolVersions;
 import io.modelcontextprotocol.spec.McpStreamableServerSession;
 import io.modelcontextprotocol.spec.McpStreamableServerTransportProvider;
 import io.modelcontextprotocol.util.KeepAliveScheduler;
@@ -54,6 +53,7 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
     private final boolean disallowDelete;
     private final ObjectMapper json = LegacyTransportJson.objectMapper();
     private final JacksonMcpJsonMapper mapper = new JacksonMcpJsonMapper(json);
+    private final HttpServletStreamableServerTransportProvider rejectionTransport;
     private final Scheduler timer;
     private final KeepAliveScheduler keepAlive;
     private volatile McpStreamableServerSession.Factory factory;
@@ -67,6 +67,8 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
         this.idleTimeout = idleTimeout;
         this.disallowDelete = disallowDelete;
         long nanos = idleTimeout.toNanos();
+        // This delegate has no session factory or maintenance tasks. The SDK owns its rejection responses.
+        rejectionTransport = newSdkTransport();
         timer = Schedulers.fromExecutorService(Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().daemon().name("policynim-mcp-session-maintenance").factory()));
         // A peer that drops a silent TCP stream is observable only after a write. Probe idle
@@ -115,7 +117,7 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
         try {
             // The old transport issues a new ID even when initialize carries a live session ID.
             // Keep that new session independent of the one the caller already owns.
-            if (channel != null && "POST".equals(request.getMethod())) {
+            if (canInitialize(request)) {
                 byte[] body = request.getInputStream().readNBytes(REQUEST_MAX_BYTES + 1);
                 if (body.length > REQUEST_MAX_BYTES) {
                     response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
@@ -128,7 +130,7 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
                 }
             }
             if (channel == null) {
-                serveFresh(request, response);
+                rejectionTransport.service(request, new TransportResponse(response));
                 return;
             }
             channel.delegate.service(request, new TransportResponse(response));
@@ -146,6 +148,21 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
                 }
             }
         }
+    }
+
+    private static boolean canInitialize(HttpServletRequest request) {
+        if (!"POST".equals(request.getMethod())) {
+            return false;
+        }
+        String accept = request.getHeader("Accept");
+        String contentType = request.getContentType();
+        if (accept == null || !accept.contains("application/json") || !accept.contains("text/event-stream")
+            || contentType == null) {
+            return false;
+        }
+        int parameters = contentType.indexOf(';');
+        String type = parameters < 0 ? contentType : contentType.substring(0, parameters);
+        return "application/json".equalsIgnoreCase(type.trim());
     }
 
     private boolean initializes(byte[] body, String encoding) {
@@ -252,8 +269,7 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
 
     @Override
     public List<String> protocolVersions() {
-        // Only the HTTP transport's supported revisions belong in its initialize response.
-        return List.of(ProtocolVersions.MCP_2025_03_26, ProtocolVersions.MCP_2025_06_18, ProtocolVersions.MCP_2025_11_25);
+        return rejectionTransport.protocolVersions();
     }
 
     @Override
@@ -291,14 +307,17 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
         }
         keepAlive.shutdown();
         timer.dispose();
+        rejectionTransport.destroy();
         active.forEach(Channel::close);
     }
 
+    private HttpServletStreamableServerTransportProvider newSdkTransport() {
+        return HttpServletStreamableServerTransportProvider.builder().mcpEndpoint(path).jsonMapper(mapper)
+            .disallowDelete(disallowDelete).maxRequestSize(REQUEST_MAX_BYTES).sessionSweepInterval(null).build();
+    }
+
     private final class Channel {
-        private final HttpServletStreamableServerTransportProvider delegate =
-            HttpServletStreamableServerTransportProvider.builder().mcpEndpoint(path).jsonMapper(mapper)
-                .disallowDelete(disallowDelete).maxRequestSize(REQUEST_MAX_BYTES)
-                .sessionSweepInterval(null).build();
+        private final HttpServletStreamableServerTransportProvider delegate = newSdkTransport();
         private McpStreamableServerSession session;
         private final AtomicBoolean disposed = new AtomicBoolean();
         private volatile long lastAccess = System.nanoTime();
