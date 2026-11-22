@@ -122,6 +122,8 @@ jobs:
           uv pip check
       - name: Compare installed Java and Python pack commands offline
         run: build/parity-python/.venv/bin/python -B src/test/parity/explicit_pack.py --jar target/policynim.jar --reference-root build/parity-python
+      - name: Compare the installed wheel and jar over authenticated HTTP
+        run: build/parity-python/.venv/bin/python -B src/test/parity/grounded_http.py --jar target/policynim.jar --reference-root build/parity-python
       - name: Build the runtime image from the repository Dockerfile
         run: docker build --iidfile "$RUNNER_TEMP/policynim-image-id" .
       - name: Compare the installed wheel, jar and nonroot image with the pinned bundle

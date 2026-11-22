@@ -352,7 +352,8 @@ async def main():
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
-        python_env.update(POLICYNIM_MCP_HOST="127.0.0.1", POLICYNIM_MCP_PORT=str(port),
+        # The installed wheel selects hosted startup when its platform supplies PORT.
+        python_env.update(PORT=str(port), POLICYNIM_MCP_HOST="127.0.0.1", POLICYNIM_MCP_PORT=str(port),
                           POLICYNIM_MCP_REQUIRE_AUTH="true", POLICYNIM_MCP_BEARER_TOKENS=token,
                           POLICYNIM_MCP_PUBLIC_BASE_URL="https://parity.invalid")
         async with server([cli, "mcp", "--transport", "streamable-http"], python_env, python_dir,
