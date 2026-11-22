@@ -14,10 +14,12 @@ import java.util.List;
 /** Runs local source inspection before the application opens a server or initializes storage. */
 public final class SourceCatalogCommand {
     private static final String USAGE = """
-        Usage: java -jar <jar> policies <command> --source --corpus-root=<path> [--format text|json]
+        Usage: java -jar <jar> policies <command> --source [--corpus-root=<path>] [--format text|json]
           validate           Check source metadata and revisions.
-          list               List the policies in the selected directory.
+          list               List the selected policies.
           show <policy ID>   Show an exact policy ID and its Markdown body.
+          --source           Inspect the shipped policies or the directory in POLICYNIM_CORPUS_DIR.
+          --corpus-root      Select a local directory for this command.
         """;
 
     private SourceCatalogCommand() { }
@@ -46,7 +48,7 @@ public final class SourceCatalogCommand {
             return 0;
         }
         try {
-            SourceCatalog catalog = SourceCatalog.read(options.root());
+            SourceCatalog catalog = CatalogSourceSettings.read(options.root(), System.getenv());
             JsonNode view = switch (options.command()) {
                 case "validate" -> catalog.validate();
                 case "list" -> catalog.list();
@@ -197,8 +199,8 @@ public final class SourceCatalogCommand {
                 throw new IllegalArgumentException(command.equals("show")
                     ? "Provide exactly one policy ID for show." : "This command accepts no positional arguments.");
             }
-            if (!source || root == null) {
-                throw new IllegalArgumentException("Select editable source files with --source and --corpus-root=<path>.");
+            if (!source) {
+                throw new IllegalArgumentException("Select policy sources with --source.");
             }
             return new Options(command, operands.isEmpty() ? null : operands.getFirst(), root, format.equals("json"), false);
         }

@@ -29,7 +29,7 @@ The default runtime is offline from live providers: NVIDIA-backed embedding, rer
 
 ## Policy Ingest
 
-Use `java -jar target/policynim.jar policies validate --source --corpus-root=/absolute/path/to/policies` to inspect an explicit policy pack or a plain Markdown directory. A root `pack.toml` selects the files and declares each policy’s provenance. The command can run without JDBC or provider credentials. [List policies and inspect their revisions](docs/hosted-runbook.md#inspect-a-local-policy-directory)
+Run `java -jar target/policynim.jar policies list --source` to see the 26 policies shipped in the jar. Use `POLICYNIM_CORPUS_DIR` or pass `--corpus-root=/absolute/path/to/policies` to inspect your own directory. The commands run without JDBC or a provider key. [List policies and inspect their revisions](docs/hosted-runbook.md#inspect-a-local-policy-directory)
 
 Build the application jar, configure JDBC storage, then populate the policy chunk table:
 

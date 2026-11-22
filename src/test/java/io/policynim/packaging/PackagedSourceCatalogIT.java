@@ -136,9 +136,48 @@ class PackagedSourceCatalogIT {
             assertEquals(2, misplaced.exit(), misplaced::diagnostics);
             misplaced.assertUsageError();
             cli.run("policies", "validate", selector).assertUsageError();
-            cli.run("policies", "list", "--source").assertUsageError();
+            var defaults = cli.run("policies", "list", "--source", "--format=json").json(0);
+            assertEquals(26, defaults.required("effective_count").intValue());
+            assertEquals("sha256:04a26d71f3b54eb63e41e779585177ce397767cdf89da9368de3e92d61667a26",
+                defaults.required("digest").textValue());
             cli.run("policies", "show", "--source", selector).assertUsageError();
             cli.run("policies", "list", "--source", selector, "--format", "xml").assertUsageError();
+        }
+    }
+
+    @Test
+    void sourceSettingsRespectExplicitRootAndRecoverFromFailedSelection(@TempDir Path directory) throws Exception {
+        Path root = directory.resolve("custom");
+        put(root, "one.md", "---\npolicy_id: LOCAL-1\n---\n# Local source\n");
+        Path config = directory.resolve("settings.env");
+        try (var occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
+            var cli = new CatalogJar(directory, occupied.getLocalPort());
+            String[] validate = {"policies", "validate", "--source", "--format=json"};
+            var missing = Map.of("POLICYNIM_CORPUS_DIR", "../missing");
+            String diagnostic = cli.run(missing, validate).sourceError();
+            assertTrue(diagnostic.contains("missing") && diagnostic.contains("--corpus-root"));
+            var explicit = cli.run(missing, "policies", "list", "--source", "--format=json",
+                "--corpus-root=" + root).json(0);
+            assertEquals("LOCAL-1", explicit.at("/policies/0/policy/policy_id").textValue());
+            // Non-English test data: whitespace trimmed by the reference setting validator.
+            var corrected = cli.run(Map.of("POLICYNIM_CORPUS_DIR", "\u00a0../custom\u0085"), validate).json(0);
+            assertEquals(1, corrected.required("effective_count").intValue());
+            assertEquals(26, cli.run(Map.of("POLICYNIM_CORPUS_DIR", "  "), validate).json(0)
+                .required("effective_count").intValue());
+            var profile = Map.of("POLICYNIM_PROFILE", "unresolved-profile.toml");
+            assertTrue(cli.run(profile, validate).sourceError().contains("POLICYNIM_PROFILE"));
+            Files.writeString(config, "# User configuration\nOTHER_SETTING=enabled\n", UTF_8);
+            var fromFile = Map.of("POLICYNIM_CONFIG_FILE", config.toString());
+            assertEquals(26, cli.run(fromFile, validate).json(0).required("effective_count").intValue());
+            Files.writeString(config, "export POLICYNIM_CORPUS_DIR='../custom'\n", UTF_8);
+            assertEquals(1, cli.run(fromFile, validate).json(0).required("effective_count").intValue());
+            var overridden = Map.of("POLICYNIM_CONFIG_FILE", config.toString(), "POLICYNIM_CORPUS_DIR", "  ");
+            assertEquals(26, cli.run(overridden, validate).json(0).required("effective_count").intValue());
+            Files.writeString(config, "POLICYNIM_PROFILE=team.toml\n", UTF_8);
+            assertTrue(cli.run(fromFile, validate).sourceError().contains("POLICYNIM_PROFILE"));
+            Files.delete(config);
+            assertTrue(cli.run(fromFile, validate).sourceError().contains("POLICYNIM_CONFIG_FILE"));
+            assertEquals(0, cli.run(fromFile, "policies", "validate", "--help").exit());
         }
     }
 
@@ -157,14 +196,14 @@ class PackagedSourceCatalogIT {
     private record CatalogJar(Path directory, int port) {
 
         Reply run(String... arguments) throws Exception {
-            return run(Map.of("LC_ALL", "C.UTF-8"), arguments);
+            return run(Map.of(), arguments);
         }
 
         Reply run(Map<String, String> overrides, String... arguments) throws Exception {
             Path home = Files.createDirectories(directory.resolve("home"));
             Path cwd = Files.createDirectories(directory.resolve("work"));
             var env = Map.of(
-                "HOME", home.toString(), "XDG_DATA_HOME", home.resolve("data").toString(),
+                "LC_ALL", "C.UTF-8", "HOME", home.toString(), "XDG_DATA_HOME", home.resolve("data").toString(),
                 "XDG_CONFIG_HOME", home.resolve("config").toString(),
                 "POLICYNIM_MCP_TRANSPORT", "stdio", "POLICYNIM_STORAGE_MODE", "jdbc",
                 "SPRING_DATASOURCE_URL", "jdbc:postgresql://127.0.0.1:" + port + "/source_test?connectTimeout=1",
