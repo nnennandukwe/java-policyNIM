@@ -1,0 +1,11 @@
+{
+  "files": {
+    "a/A.md": "---\npolicy_id: A\ntitle: Item A\ndomain: ops\nruntime_rules:\n  - action: http_request\n    effect: confirm\n    reason: Review requests.\n    url_host_patterns: [\"Docs.example\"]\n---\n# Item A\n\nUse rule A.\n",
+    "a/pack.toml": "schema_version=1\npack_id=\"matching.a\"\nversion=\"1.0.0\"\n[[policies]]\npolicy_id=\"A\"\npath=\"A.md\"\n",
+    "b/B.md": "---\npolicy_id: B\ntitle: Item B\ndomain: ops\nruntime_rules:\n  - action: http_request\n    effect: block\n    reason: Review requests.\n    url_host_patterns: [\"docs.EXAMPLE\"]\n---\n# Item B\n\nUse rule B.\n",
+    "b/pack.toml": "schema_version=1\npack_id=\"matching.b\"\nversion=\"1.0.0\"\n[[policies]]\npolicy_id=\"B\"\npath=\"B.md\"\n",
+    "rules.toml": "schema_version = 1\nprofile_id = \"matchers\"\n\n[[packs]]\npath=\"a\"\npack_id=\"matching.a\"\nversion=\"1.0.0\"\ndigest=\"sha256:f3a0bf46f4727665ca8a3fb2d62aef7196bf38cfc770ef3fde5dce96e124a97e\"\n[packs.policies]\nA=\"sha256:f3a0bf46f4727665ca8a3fb2d62aef7196bf38cfc770ef3fde5dce96e124a97e\"\n\n[[packs]]\npath=\"b\"\npack_id=\"matching.b\"\nversion=\"1.0.0\"\ndigest=\"sha256:05587953c962e092613ad9a51f198123c7db11feadc6e6166d4e8de899d8ff6f\"\n[packs.policies]\nB=\"sha256:05587953c962e092613ad9a51f198123c7db11feadc6e6166d4e8de899d8ff6f\"\n"
+  },
+  "exclusion": "\n[[exclusions]]\ntarget_id=\"B\"\nexpected_digest=\"sha256:582cdc8c9d682a56900d1e665b021e8a1197f02c77ecf30771c95a4bf9fbb3e3\"\nreason=\"Use the reviewed source.\"\n",
+  "repaired_catalog_digest": "sha256:c48910eafdec767bfae6db2d11916dfad4d072e07b28c4c0985ed622abc39396"
+}

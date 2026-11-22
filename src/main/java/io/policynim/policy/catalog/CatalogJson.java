@@ -31,6 +31,10 @@ final class CatalogJson {
         return hex(sha256().digest(content));
     }
 
+    static String jsonDigest(ObjectNode value) {
+        return contentDigest(compact(value));
+    }
+
     static ObjectNode entry(ParsedPolicyDocument doc, String path, ObjectNode provenance) {
         ObjectNode policy = metadata(doc.metadata(), provenance);
         MessageDigest target = sha256();
@@ -66,7 +70,15 @@ final class CatalogJson {
     }
 
     static String catalogDigest(Iterable<ObjectNode> entries) {
+        return catalogDigest(null, entries);
+    }
+
+    static String catalogDigest(String profileDigest, Iterable<ObjectNode> entries) {
         MessageDigest catalog = sha256();
+        if (profileDigest != null) {
+            catalog.update(profileDigest.getBytes(StandardCharsets.UTF_8));
+            catalog.update((byte) '\n');
+        }
         var ordered = entries.iterator();
         while (ordered.hasNext()) {
             catalog.update(compact(ordered.next()));

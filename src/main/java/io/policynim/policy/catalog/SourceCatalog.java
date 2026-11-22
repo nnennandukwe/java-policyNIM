@@ -1,7 +1,6 @@
 package io.policynim.policy.catalog;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.policynim.policy.model.ParsedPolicyDocument;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import io.policynim.policy.parse.SourceMarkdownParser;
 
@@ -13,10 +12,8 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -25,14 +22,35 @@ public final class SourceCatalog {
 
     private static final String BUNDLE_ROOT = "/io/policynim/bundled/policies/";
 
-    private final NavigableMap<String, ObjectNode> entries;
+    private final NavigableMap<String, ObjectNode> entries = new TreeMap<>(SourceCatalog::compareCodePoints);
     private final String digest;
     private final List<String> unlisted;
+    private final String profileId;
+    private final String profileDigest;
+    private final List<ObjectNode> publicPins;
+    private final int effectiveCount;
 
-    private SourceCatalog(Builder builder, List<String> unlisted) {
-        this.entries = builder.entries;
-        this.digest = CatalogJson.catalogDigest(entries.values());
+    private SourceCatalog(List<ObjectNode> entries, List<String> unlisted, String profileId, String profileDigest,
+                          List<ObjectNode> publicPins, int effectiveCount) {
+        for (ObjectNode entry : entries) {
+            this.entries.put(entry.path("policy").path("policy_id").textValue(), entry);
+        }
+        this.digest = CatalogJson.catalogDigest(profileDigest, this.entries.values());
         this.unlisted = List.copyOf(unlisted);
+        this.profileId = profileId;
+        this.profileDigest = profileDigest;
+        this.publicPins = publicPins;
+        this.effectiveCount = effectiveCount;
+    }
+
+    static SourceCatalog profiled(String profileId, String profileDigest, List<ObjectNode> publicPins,
+                                  List<ObjectNode> composedEntries, int effectiveCount) {
+        return new SourceCatalog(composedEntries.stream().map(ObjectNode::deepCopy).toList(), List.of(),
+            profileId, profileDigest, publicPins.stream().map(ObjectNode::deepCopy).toList(), effectiveCount);
+    }
+
+    public static SourceCatalog readProfile(Path file) {
+        return ProfileResolver.resolve(file);
     }
 
     public static SourceCatalog read(Path selected) {
@@ -42,16 +60,16 @@ public final class SourceCatalog {
             List<String> unlisted = List.of();
             boolean manifested = directory.hasManifest();
             if (manifested) {
-                unlisted = PackSourceFiles.read(directory.root(), builder::addPackMember);
+                unlisted = PackSourceFiles.read(directory.root(), builder::addPackMember).unlisted();
             } else {
                 directory.readPlainFiles(builder::addPlainFile);
             }
             directory.verifySelection(manifested);
-            if (builder.entries.isEmpty()) {
+            if (builder.members.isEmpty()) {
                 throw new InvalidPolicyDocumentException("The source catalog has no policies. "
                     + "Check that the directory passed to --corpus-root contains .md policy files.");
             }
-            return new SourceCatalog(builder, unlisted);
+            return standalone(builder.members.values().stream().toList(), unlisted);
         } catch (IOException | DirectoryIteratorException error) {
             throw new InvalidPolicyDocumentException("Couldn't inspect policy root " + selected + ".", error);
         }
@@ -62,11 +80,41 @@ public final class SourceCatalog {
     }
 
     static SourceCatalog readBundled(Function<String, InputStream> resources) {
+        return standalone(captureBundled(PackLocation.Bundled.BASELINE, resources).members(), List.of());
+    }
+
+    private static SourceCatalog standalone(List<CapturedPack.Member> members, List<String> unlisted) {
+        return new SourceCatalog(members.stream().map(CapturedPack.Member::standaloneEntry).toList(),
+            unlisted, null, null, List.of(), members.size());
+    }
+
+    static CapturedPack capturePack(PackLocation location) {
+        if (location instanceof PackLocation.Bundled bundled) {
+            return captureBundled(bundled, SourceCatalog.class::getResourceAsStream);
+        }
+        Path root = ((PackLocation.Local) location).realRoot();
+        try {
+            var directory = SourceDirectory.open(root);
+            if (!directory.hasManifest()) {
+                throw PackLocation.missingManifest();
+            }
+            var builder = new Builder();
+            var read = PackSourceFiles.read(directory.root(), builder::addPackMember);
+            directory.verifySelection(true);
+            return builder.capture(read.manifest());
+        } catch (IOException | DirectoryIteratorException error) {
+            throw new InvalidPolicyDocumentException("Couldn't inspect the selected policy pack. Check directory access and retry.", error);
+        }
+    }
+
+    private static CapturedPack captureBundled(PackLocation.Bundled bundled, Function<String, InputStream> resources) {
+        String prefix = bundled == PackLocation.Bundled.BASELINE ? "" : bundled.topic() + "/";
+        String basename = bundled == PackLocation.Bundled.BASELINE ? "policies" : bundled.topic();
         var builder = new Builder();
         var paths = new HashSet<String>();
         String path = "pack.toml";
         try {
-            var manifest = PolicyPackManifest.parse(readResource(resources, path));
+            var manifest = PolicyPackManifest.parse(readResource(resources, prefix + path));
             for (int index = 0; index < manifest.policies().size(); index++) {
                 var member = manifest.policies().get(index);
                 String field = "pack.toml policies." + index + ".path";
@@ -75,17 +123,17 @@ public final class SourceCatalog {
                     throw new InvalidPolicyDocumentException(field + " repeats a member.");
                 }
                 path = memberPath;
-                builder.addPackMember(path, "policies/" + path, readResource(resources, path), manifest, member);
+                builder.addPackMember(path, basename + "/" + path, readResource(resources, prefix + path), manifest, member);
                 path = "pack.toml";
             }
-            return new SourceCatalog(builder, List.of());
+            return builder.capture(manifest);
         } catch (IOException | InvalidPolicyDocumentException error) {
             String problem = switch (error) {
                 case FileNotFoundException missing -> "Missing";
                 case IOException unreadable -> "Couldn't read";
                 default -> "Invalid";
             };
-            throw new InvalidPolicyDocumentException(problem + " bundled policy resource policies/" + path
+            throw new InvalidPolicyDocumentException(problem + " bundled policy resource policies/" + prefix + path
                 + ". Reinstall PolicyNIM or pass --corpus-root=<path> to select a local policy directory.", error);
         }
     }
@@ -100,23 +148,22 @@ public final class SourceCatalog {
     }
 
     private static final class Builder {
-        private final NavigableMap<String, ObjectNode> entries = new TreeMap<>(SourceCatalog::compareCodePoints);
-        private final Map<String, String> sourcePaths = new HashMap<>();
+        private final NavigableMap<String, CapturedPack.Member> members = new TreeMap<>(SourceCatalog::compareCodePoints);
         private final SourceMarkdownParser parser = new SourceMarkdownParser();
 
         void addPlainFile(String path, String sourcePath, byte[] bytes) {
-            var doc = parser.parse(sourcePath, decode(sourcePath, bytes));
-            addEntry(path, doc, CatalogJson.legacyProvenance(CatalogJson.contentDigest(bytes)));
+            var source = parser.parseSource(sourcePath, decode(sourcePath, bytes));
+            addEntry(path, source, CatalogJson.legacyProvenance(CatalogJson.contentDigest(bytes)));
         }
 
         void addPackMember(String path, String sourcePath, byte[] bytes, PolicyPackManifest manifest,
                            PolicyPackManifest.Member member) {
-            var doc = parser.parsePackMember(sourcePath, decode(sourcePath, bytes)).document();
-            if (!member.policyId().equals(doc.metadata().policyId())) {
+            var source = parser.parsePackMember(sourcePath, decode(sourcePath, bytes));
+            if (!member.policyId().equals(source.document().metadata().policyId())) {
                 throw new InvalidPolicyDocumentException("pack.toml policy_id for " + member.path()
                     + " doesn't match its Markdown policy_id.");
             }
-            addEntry(path, doc, member.provenance(CatalogJson.contentDigest(bytes), manifest));
+            addEntry(path, source, member.provenance(CatalogJson.contentDigest(bytes), manifest));
         }
 
         private static String decode(String sourcePath, byte[] bytes) {
@@ -127,21 +174,28 @@ public final class SourceCatalog {
             }
         }
 
-        private void addEntry(String path, ParsedPolicyDocument doc, ObjectNode provenance) {
+        private void addEntry(String path, SourceMarkdownParser.ParsedSource source, ObjectNode provenance) {
+            var doc = source.document();
             String id = doc.metadata().policyId();
-            String previous = sourcePaths.putIfAbsent(id, doc.sourcePath());
+            var previous = members.get(id);
             if (previous != null) {
                 throw new InvalidPolicyDocumentException("Duplicate effective policy_id " + quotedId(id)
-                    + " in " + previous + " and " + doc.sourcePath() + ".");
+                    + " in " + previous.source().document().sourcePath() + " and " + doc.sourcePath() + ".");
             }
-            entries.put(id, CatalogJson.entry(doc, path, provenance));
+            members.put(id, new CapturedPack.Member(path, source, CatalogJson.entry(doc, path, provenance)));
+        }
+
+        CapturedPack capture(PolicyPackManifest manifest) {
+            return new CapturedPack(manifest.packId(), manifest.version(), List.copyOf(members.values()));
         }
     }
 
     public ObjectNode list() {
         ObjectNode result = CatalogJson.object().put("schema_version", 1);
         sourceScope(result);
-        result.put("digest", digest).putNull("profile_id").putNull("profile_digest").putArray("pack_pins");
+        var pins = result.put("digest", digest).put("profile_id", profileId).put("profile_digest", profileDigest)
+            .putArray("pack_pins");
+        publicPins.forEach(pin -> pins.add(pin.deepCopy()));
         counts(result);
         var policies = result.putArray("policies");
         entries.values().forEach(entry -> policies.add(entry.deepCopy()));
@@ -170,7 +224,7 @@ public final class SourceCatalog {
     }
 
     private void counts(ObjectNode node) {
-        var paths = node.put("authored_count", entries.size()).put("effective_count", entries.size())
+        var paths = node.put("authored_count", entries.size()).put("effective_count", effectiveCount)
             .putNull("indexed_count").putArray("unlisted_markdown");
         unlisted.forEach(paths::add);
     }
@@ -191,7 +245,7 @@ public final class SourceCatalog {
     }
 
     // The reference CLI presents IDs as Python string literals, including quotes and control escapes.
-    private static String quotedId(String id) {
+    static String quotedId(String id) {
         char quote = id.indexOf('\'') >= 0 && id.indexOf('"') < 0 ? '"' : '\'';
         StringBuilder literal = new StringBuilder().append(quote);
         id.codePoints().forEach(code -> {
