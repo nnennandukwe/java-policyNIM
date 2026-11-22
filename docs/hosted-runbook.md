@@ -115,7 +115,7 @@ export POLICYNIM_PROVIDER_NVIDIA_API_KEY=replace-with-runtime-secret
 
 ## Inspect a local policy directory
 
-Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Select a directory without a root `pack.toml`. The command reads nested Markdown, skips `TEMPLATE.md`, and exits after printing its result. For a path relative to the current directory, use the same working directory for all three commands.
+Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Put `policies` immediately after the jar path. Select a directory without a root `pack.toml`. The command reads nested Markdown, skips `TEMPLATE.md`, and exits after printing its result. For a path relative to the current directory, use the same working directory for all three commands.
 
 ```bash
 java -jar /app/policynim.jar policies validate --source --corpus-root=/work/policies --format json

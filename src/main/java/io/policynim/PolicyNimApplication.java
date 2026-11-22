@@ -28,7 +28,7 @@ import java.util.Map;
 public class PolicyNimApplication {
 
     public static void main(String[] args) {
-        if (args.length > 0 && "policies".equals(args[0])) {
+        if (SourceCatalogCommand.isSourceCatalogCommand(args)) {
             // Policy text and JSON use UTF-8 even when the launch locale sets stdout to ASCII.
             var output = new PrintStream(System.out, true, StandardCharsets.UTF_8);
             var errors = new PrintStream(System.err, true, StandardCharsets.UTF_8);

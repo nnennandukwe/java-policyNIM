@@ -74,10 +74,12 @@ final class SourceFrontmatter {
     }
 
     static boolean compact(String value) {
+        // A lone bracket stays in the text. The source format requires both brackets for an inline list.
         return value.startsWith("[") && value.endsWith("]");
     }
 
     static String scalar(String raw) {
+        // The source grammar unescapes paired quote marks only. Other backslashes belong to the author's value.
         if (quoted(raw)) {
             return raw.substring(1, raw.length() - 1).replace("\\'", "'").replace("\\\"", "\"");
         }

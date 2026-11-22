@@ -22,6 +22,15 @@ public final class SourceCatalogCommand {
 
     private SourceCatalogCommand() { }
 
+    public static boolean isSourceCatalogCommand(String[] args) {
+        for (String arg : args) {
+            if (!arg.startsWith("-")) {
+                return arg.equals("policies");
+            }
+        }
+        return false;
+    }
+
     public static int run(String[] args, PrintStream output, PrintStream errors) {
         Options options;
         try {
@@ -95,6 +104,9 @@ public final class SourceCatalogCommand {
 
     private record Options(String command, String policyId, Path root, boolean json, boolean help) {
         static Options parse(String[] args) {
+            if (args.length == 0 || !args[0].equals("policies")) {
+                throw new IllegalArgumentException("Place policies first, followed by its command and source options.");
+            }
             if (args.length == 2 && args[1].equals("--help")) {
                 return new Options(null, null, null, false, true);
             }

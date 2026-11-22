@@ -143,6 +143,7 @@ final class SourceRuntimeRules {
     }
 
     private String matcherItem(String raw, int lineIndex) {
+        // The reference treats decimal and exponent forms as numbers. Hex and underscore spellings are strings.
         if (raw.isEmpty()) {
             throw invalid(lineIndex, "matcher list items must not be empty.");
         }

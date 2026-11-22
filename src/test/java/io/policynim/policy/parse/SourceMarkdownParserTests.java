@@ -43,6 +43,23 @@ class SourceMarkdownParserTests {
     }
 
     @Test
+    void keepsUnpairedOpeningDelimitersInOrdinarySourceMetadata() {
+        var metadata = parser.parse("policies/a.md", "---\ntitle: 'unterminated\ntags: [a\n---\n# Source\n").metadata();
+        assertThat(metadata.title()).isEqualTo("'unterminated");
+        assertThat(metadata.tags()).containsExactly("[a");
+    }
+
+    @Test
+    void preservesStringMatchersWithHexOrUnderscoreSpellings() {
+        String policy = "---\nruntime_rules:\n  - action: file_write\n    effect: block\n"
+            + "    reason: Review\n    path_globs: [%s]\n---\n# Source\n";
+        var rule = parser.parseSource("policies/a.md", policy.formatted("0x10, 1_000")).rules().getFirst();
+        assertThat(rule.pathGlobs()).containsExactly("0x10", "1_000");
+        assertThatThrownBy(() -> parser.parse("policies/a.md", policy.formatted("1000")))
+            .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("line 6");
+    }
+
+    @Test
     void leadingBlankPreventsFrontmatterRecognitionAndDotfilesKeepTheirName() {
         String body = "\n---\npolicy_id: ignored\n---\n\nBody\n";
         var parsed = parser.parse("policies/.md", body);

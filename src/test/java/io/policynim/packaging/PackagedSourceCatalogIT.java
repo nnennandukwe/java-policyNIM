@@ -129,6 +129,10 @@ class PackagedSourceCatalogIT {
             assertTrue(help.stdout().contains("--source") && help.stdout().contains("--corpus-root")
                 && help.stdout().contains("--format"));
             String selector = "--corpus-root=" + directory.resolve("policies");
+            var misplaced = cli.run("--spring.main.banner-mode=off", "policies", "validate", "--source", selector,
+                "--format", "json");
+            assertEquals(2, misplaced.exit());
+            misplaced.assertUsageError();
             cli.run("policies", "validate", selector).assertUsageError();
             cli.run("policies", "list", "--source").assertUsageError();
             cli.run("policies", "show", "--source", selector).assertUsageError();

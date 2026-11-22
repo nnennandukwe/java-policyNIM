@@ -28,6 +28,17 @@ class SourceCatalogCommandTests {
         assertThat(err.size()).isZero();
     }
 
+    @Test
+    void firstOperandSelectsTheCommandEvenWhenItsSyntaxNeedsCorrection() {
+        String[] misplaced = {"--spring.main.banner-mode=off", "policies", "validate"};
+        assertThat(SourceCatalogCommand.isSourceCatalogCommand(misplaced)).isTrue();
+        assertThat(run(misplaced)).isEqualTo(2);
+        assertThat(out.size()).isZero();
+        assertThat(err.toString(StandardCharsets.UTF_8)).contains("Place policies first");
+        assertThat(SourceCatalogCommand.isSourceCatalogCommand(new String[]{"ingest", "policies"})).isFalse();
+        assertThat(SourceCatalogCommand.isSourceCatalogCommand(new String[]{"--policynim.storage.mode=noop"})).isFalse();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"--corpus-root=", "--format=other", "--source=false", "--unknown"})
     void rejectsInvalidOptionsAsUsageErrorsBeforeOpeningTheCorpus(String option) {

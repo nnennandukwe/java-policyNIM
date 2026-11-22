@@ -39,6 +39,13 @@ class CatalogCommand:
     root: Path
     env: dict[str, str]
 
+    def at_root(self, root, **environment):
+        """Select another source root for the same installation and working directory."""
+        env = self.env | environment
+        if self.product == "python":
+            env["POLICYNIM_CORPUS_DIR"] = str(root)
+        return replace(self, root=root, env=env)
+
     def run(self, *arguments, source=True, separate_root=False):
         """Run one bounded command with the selected root and source flag."""
         args = [*self.program, "policies", *arguments]
@@ -161,10 +168,7 @@ def check_alternate_root_in_c_locale(cli):
     title = "Caf\u00e9 \u6771\u4eac"
     body = f"# {title}\n"
     write_fixture(root, {"api/tasks.md": body})
-    env = cli.env | {"LC_ALL": "C"}
-    if cli.product == "python":
-        env["POLICYNIM_CORPUS_DIR"] = str(root)
-    selected = replace(cli, root=root, env=env)
+    selected = cli.at_root(root, LC_ALL="C")
     policy_id = "GUIDELINES-API-TASKS"
     for extra in ([], ["--format", "json"]):
         result = selected.run("show", policy_id, *extra)
@@ -175,6 +179,41 @@ def check_alternate_root_in_c_locale(cli):
             match([shown["policy"]["policy_id"], shown["policy"]["domain"], shown["path"], shown["body"]],
                   [policy_id, "general", "api/tasks.md", body], f"{cli.product} alternate root")
     return {"policyId": policy_id, "domain": "general", "utf8Title": title}
+
+
+def check_quoted_tags_and_display(cli):
+    """Check quoted tag bytes, catalog identity and each command's source details."""
+    selected = cli.at_root(cli.root.parent / "quoted" / "policies")
+    relative = "api/quotes.md"
+    body = "# Quoted tags\n"
+    source = "---\n" + r'''tags: ["path\\file", "a\tb", "say \"go, now\"", 'don\'t']''' + "\n---\n" + body
+    write_fixture(selected.root, {relative: source})
+    revision = "sha256:d1713635f2ae5ddd8e01579b3e58e4f3f6b97ce42f7bd9d8be9f924e10b01de9"
+    target = "sha256:bd463f0de7904c9d051b0aec39d9eb244c5a9717fc09042a186625977460dc73"
+    catalog = "sha256:ec525fab5254225908e15d153438662b9856164ea8e63e7ee4a29dc6e0b341d3"
+    require(sha256((selected.root / relative).read_bytes()) == revision, "Quoted fixture bytes changed")
+
+    listed = selected.json("list")
+    match(listed["digest"], catalog, f"{cli.product} quoted catalog digest")
+    entry, = listed["policies"]
+    policy = entry["policy"]
+    match(policy["tags"], [r"path\\file", r"a\tb", 'say "go, now"', "don't"], f"{cli.product} quoted tags")
+    match([entry["path"], policy["provenance"]["content_digest"], entry["target_digest"]],
+          [relative, revision, target], f"{cli.product} quoted source identity")
+    match(selected.json("show", "API-QUOTES"), entry | {"scope": "source", "generation_id": None},
+          f"{cli.product} quoted show")
+
+    summaries = (
+        (["list"], f"Source catalog: 1 policies; {catalog}\nGeneration: unknown (source inspection only)\n"
+                   "API-QUOTES  active  api  legacy directory (pack unknown)  Quoted tags\n"),
+        (["show", "API-QUOTES"], "API-QUOTES: Quoted tags\nScope: source; generation: unknown\n"
+                                 f"Source: {relative}; state: active\nRevision: {revision}\nGrounding: legacy_unknown\n{body}\n"),
+    )
+    for args, expected in summaries:
+        response = selected.run(*args)
+        require(response.returncode == 0 and not response.stderr and response.stdout == expected.encode("utf-8"),
+                f"{cli.product} {args} printed unexpected source details: {response.stdout!r}")
+    return {"tags": policy["tags"], "path": entry["path"], "revision": revision, "catalogDigest": listed["digest"]}
 
 
 def exercise(cli, fixture):
@@ -205,7 +244,8 @@ def exercise(cli, fixture):
             f"{cli.product}: source files changed during inspection")
     return {"scope": listed["scope"], "catalogDigest": listed["digest"],
             "policyIds": [p["policy"]["policy_id"] for p in listed["policies"]],
-            "rootErrors": root_errors, "recovery": recovery, "alternateRootCLocale": check_alternate_root_in_c_locale(cli)}
+            "rootErrors": root_errors, "recovery": recovery, "alternateRootCLocale": check_alternate_root_in_c_locale(cli),
+            "quotedTags": check_quoted_tags_and_display(cli)}
 
 
 def main():
