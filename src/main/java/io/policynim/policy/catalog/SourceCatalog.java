@@ -5,19 +5,25 @@ import io.policynim.policy.model.ParsedPolicyDocument;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import io.policynim.policy.parse.SourceMarkdownParser;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.function.Function;
 
 public final class SourceCatalog {
+
+    private static final String BUNDLE_ROOT = "/io/policynim/bundled/policies/";
 
     private final NavigableMap<String, ObjectNode> entries;
     private final String digest;
@@ -48,6 +54,48 @@ public final class SourceCatalog {
             return new SourceCatalog(builder, unlisted);
         } catch (IOException | DirectoryIteratorException error) {
             throw new InvalidPolicyDocumentException("Couldn't inspect policy root " + selected + ".", error);
+        }
+    }
+
+    public static SourceCatalog readBundled() {
+        return readBundled(SourceCatalog.class::getResourceAsStream);
+    }
+
+    static SourceCatalog readBundled(Function<String, InputStream> resources) {
+        var builder = new Builder();
+        var paths = new HashSet<String>();
+        String path = "pack.toml";
+        try {
+            var manifest = PolicyPackManifest.parse(readResource(resources, path));
+            for (int index = 0; index < manifest.policies().size(); index++) {
+                var member = manifest.policies().get(index);
+                String field = "pack.toml policies." + index + ".path";
+                String memberPath = PackSourceFiles.normalizedPath(member.path(), field);
+                if (!paths.add(memberPath)) {
+                    throw new InvalidPolicyDocumentException(field + " repeats a member.");
+                }
+                path = memberPath;
+                builder.addPackMember(path, "policies/" + path, readResource(resources, path), manifest, member);
+                path = "pack.toml";
+            }
+            return new SourceCatalog(builder, List.of());
+        } catch (IOException | InvalidPolicyDocumentException error) {
+            String problem = switch (error) {
+                case FileNotFoundException missing -> "Missing";
+                case IOException unreadable -> "Couldn't read";
+                default -> "Invalid";
+            };
+            throw new InvalidPolicyDocumentException(problem + " bundled policy resource policies/" + path
+                + ". Reinstall PolicyNIM or pass --corpus-root=<path> to select a local policy directory.", error);
+        }
+    }
+
+    private static byte[] readResource(Function<String, InputStream> resources, String relativePath) throws IOException {
+        try (InputStream input = resources.apply(BUNDLE_ROOT + relativePath)) {
+            if (input == null) {
+                throw new FileNotFoundException(relativePath);
+            }
+            return input.readAllBytes();
         }
     }
 
