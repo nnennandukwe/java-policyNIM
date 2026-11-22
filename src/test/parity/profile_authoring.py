@@ -177,6 +177,22 @@ def check_explicit(cli, readers, fixture):
     require(f'"{pid}" =' in (cli.cwd / quoted).read_text("utf-8"), "Dotted policy ID needs a quoted TOML key")
     read_both(readers, cli, quoted, local_report(cli.cwd / quoted))
     check_changes(cli, fixture, name)
+    if cli.product == "java" and os.name == "posix":
+        check_literal_pack_paths(cli, readers)
+
+
+def check_literal_pack_paths(writer, readers):
+    """Keep significant spaces in a Java-authored selector and refuse an ambiguous builtin directory."""
+    for directory in (" both ", "builtin:baseline"):
+        shutil.copytree(writer.cwd / "team", writer.cwd / directory)
+    name = "edge-space.toml"
+    initialized = initialize(writer, name, ["--pack", " both "])
+    match(initialized["profile"]["packs"][0]["path"], "./ both /.", "Edge-space selector")
+    read_both(readers, writer, name, local_report(writer.cwd / name))
+    for reader in readers:
+        error = "reserved for bundled selectors" if reader.product == "java" else "Couldn't access profile"
+        initialize(replace(reader, cwd=writer.cwd), "ambiguous.toml", ["--pack", "builtin:baseline"], error=error)
+    require(not (writer.cwd / "ambiguous.toml").exists(), "An ambiguous selector published a profile")
 
 
 def check_competing_writers(readers):
