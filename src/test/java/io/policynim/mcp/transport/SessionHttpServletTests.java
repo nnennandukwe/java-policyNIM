@@ -16,15 +16,19 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -215,6 +219,113 @@ class SessionHttpServletTests {
         }
         finally {
             server.closeGracefully();
+        }
+    }
+
+    @Test
+    void acceptsMixedCaseMediaRangesAndIgnoresNamesInsideParameters() throws Exception {
+        var transport = new SessionHttpServlet("/mcp", Duration.ofMinutes(30), null, false);
+        var server = McpServer.sync(transport).serverInfo("fixture", "1").build();
+        try {
+            var init = initializeRequest();
+            init.removeHeader("Accept");
+            init.addHeader("Accept", "Application/Json; profile=\"Policy,One\"");
+            init.addHeader("Accept", "TEXT/Event-Stream; q=0.8");
+            var initialized = new MockHttpServletResponse();
+            transport.service(init, initialized);
+            assertThat(initialized.getStatus()).isEqualTo(200);
+            String id = initialized.getHeader(HttpHeaders.MCP_SESSION_ID);
+            assertThat(id).isNotBlank();
+
+            for (String unsupported : new String[]{
+                "application/json; profile=\"text/event-stream\"", "application/json, text/event-stream;q=0"}) {
+                var bad = sessionRequest("GET", id);
+                bad.removeHeader("Accept");
+                bad.addHeader("Accept", unsupported);
+                var rejected = new MockHttpServletResponse();
+                transport.service(bad, rejected);
+                assertThat(rejected.getStatus()).isEqualTo(400);
+                assertThat(rejected.getContentAsString()).contains("\"code\":-32601").doesNotContain("stackTrace", unsupported);
+            }
+
+            var read = sessionRequest("GET", id);
+            read.removeHeader("Accept");
+            read.addHeader("Accept", "Text/EVENT-STREAM; profile=\"PolicyA\"");
+            var listener = new MockHttpServletResponse();
+            transport.service(read, listener);
+            assertThat(listener.getStatus()).isEqualTo(200);
+            assertThat(read.isAsyncStarted()).isTrue();
+            var deleted = new MockHttpServletResponse();
+            transport.service(sessionRequest("DELETE", id), deleted);
+            assertThat(deleted.getStatus()).isEqualTo(200);
+            assertThat(read.isAsyncStarted()).isFalse();
+        }
+        finally {
+            server.closeGracefully();
+        }
+    }
+
+    @Test
+    void deletesEachOwnedTransportOnceAndKeepsTheHeartbeatOnTheSharedTimer() throws Exception {
+        var builder = spy(HttpServletStreamableServerTransportProvider.builder());
+        var delegates = new ArrayList<HttpServletStreamableServerTransportProvider>();
+        doAnswer(call -> {
+            var delegate = spy((HttpServletStreamableServerTransportProvider) call.callRealMethod());
+            delegates.add(delegate);
+            return delegate;
+        }).when(builder).build();
+        try (var builders = mockStatic(HttpServletStreamableServerTransportProvider.class)) {
+            builders.when(HttpServletStreamableServerTransportProvider::builder).thenReturn(builder);
+            var transport = new SessionHttpServlet("/mcp", Duration.ofMinutes(30), null, false);
+            var server = McpServer.sync(transport).serverInfo("fixture", "1").build();
+            try {
+                String id = post(transport, INITIALIZE, null).getHeader(HttpHeaders.MCP_SESSION_ID);
+                assertThat(id).isNotBlank();
+                var deleted = new MockHttpServletResponse();
+                transport.service(sessionRequest("DELETE", id), deleted);
+                assertThat(deleted.getStatus()).isEqualTo(200);
+                assertThat(statusFor(transport, id)).isEqualTo(404);
+                verify(delegates.get(1)).closeGracefully();
+                finishDeleteDuringShutdown(transport);
+            }
+            finally {
+                server.closeGracefully();
+            }
+            verify(builder, times(3)).keepAliveInterval(null);
+            for (var delegate : delegates) {
+                verify(delegate).closeGracefully();
+            }
+        }
+    }
+
+    private static void finishDeleteDuringShutdown(SessionHttpServlet transport) throws Exception {
+        var session = session("closing");
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        transport.setSessionFactory(request -> new McpStreamableServerSessionInit(session, Mono.just(INITIALIZED)));
+        when(session.delete()).thenReturn(Mono.fromCallable(() -> {
+            entered.countDown();
+            if (!release.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Timed out waiting for shutdown");
+            }
+            return null;
+        }));
+        String id = post(transport, INITIALIZE, null).getHeader(HttpHeaders.MCP_SESSION_ID);
+        assertThat(id).isEqualTo("closing");
+        try (var worker = Executors.newSingleThreadExecutor()) {
+            var deleting = worker.submit(() -> {
+                var response = new MockHttpServletResponse();
+                transport.service(sessionRequest("DELETE", id), response);
+                return response.getStatus();
+            });
+            try {
+                assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+                transport.destroy();
+            }
+            finally {
+                release.countDown();
+            }
+            assertThat(deleting.get(5, TimeUnit.SECONDS)).isEqualTo(200);
         }
     }
 

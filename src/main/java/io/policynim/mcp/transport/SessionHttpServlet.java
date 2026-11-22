@@ -20,6 +20,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.MediaType;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -33,12 +34,15 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /** Owns the SDK servlet and its session together so expiry can reclaim both. */
 final class SessionHttpServlet extends HttpServlet implements McpStreamableServerTransportProvider {
@@ -123,6 +127,9 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
         try {
             // The old transport issues a new ID even when initialize carries a live session ID.
             // Keep that new session independent of the one the caller already owns.
+            if ("GET".equals(request.getMethod()) || "POST".equals(request.getMethod())) {
+                request = withSdkAccept(request);
+            }
             if (canInitialize(request)) {
                 byte[] body = request.getInputStream().readNBytes(REQUEST_MAX_BYTES + 1);
                 if (body.length > REQUEST_MAX_BYTES) {
@@ -144,6 +151,7 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
                 synchronized (this) {
                     sessions.remove(id, channel);
                 }
+                channel.close();
             }
         }
         finally {
@@ -154,6 +162,43 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
                 }
             }
         }
+    }
+
+    private static HttpServletRequest withSdkAccept(HttpServletRequest request) {
+        var headers = Collections.list(request.getHeaders("Accept"));
+        if (headers.isEmpty()) {
+            return request;
+        }
+        // SDK 2.2.0 compares raw substrings. Give it only the supported media ranges that
+        // the client accepts, without treating a quoted parameter value as another range.
+        String accepted;
+        try {
+            accepted = MediaType.parseMediaTypes(headers).stream()
+                .filter(range -> range.getQualityValue() > 0)
+                .filter(range -> range.equalsTypeAndSubtype(MediaType.APPLICATION_JSON)
+                    || range.equalsTypeAndSubtype(MediaType.TEXT_EVENT_STREAM))
+                .map(range -> range.getType() + "/" + range.getSubtype())
+                .distinct()
+                .collect(Collectors.joining(", "));
+        }
+        catch (IllegalArgumentException malformed) {
+            accepted = "";
+        }
+        if (headers.size() == 1 && headers.getFirst().equals(accepted)) {
+            return request;
+        }
+        String sdkAccept = accepted;
+        return new HttpServletRequestWrapper(request) {
+            @Override
+            public String getHeader(String name) {
+                return "Accept".equalsIgnoreCase(name) ? sdkAccept : super.getHeader(name);
+            }
+
+            @Override
+            public Enumeration<String> getHeaders(String name) {
+                return "Accept".equalsIgnoreCase(name) ? Collections.enumeration(List.of(sdkAccept)) : super.getHeaders(name);
+            }
+        };
     }
 
     private static boolean canInitialize(HttpServletRequest request) {
@@ -319,7 +364,8 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
 
     private HttpServletStreamableServerTransportProvider newSdkTransport() {
         return HttpServletStreamableServerTransportProvider.builder().mcpEndpoint(path).jsonMapper(mapper)
-            .disallowDelete(disallowDelete).maxRequestSize(REQUEST_MAX_BYTES).sessionSweepInterval(null).build();
+            .disallowDelete(disallowDelete).maxRequestSize(REQUEST_MAX_BYTES)
+            .keepAliveInterval(null).sessionSweepInterval(null).build();
     }
 
     private final class Channel {
