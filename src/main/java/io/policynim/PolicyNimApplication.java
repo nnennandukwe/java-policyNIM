@@ -1,5 +1,6 @@
 package io.policynim;
 
+import io.policynim.cli.SourceCatalogCommand;
 import io.policynim.ingest.IngestCommandLine;
 import io.policynim.mcp.transport.GroundedStdioRuntime;
 import org.springframework.boot.SpringApplication;
@@ -25,6 +26,13 @@ import java.util.Map;
 public class PolicyNimApplication {
 
     public static void main(String[] args) {
+        if (args.length > 0 && "policies".equals(args[0])) {
+            int status = SourceCatalogCommand.run(args, System.out, System.err);
+            if (status != 0) {
+                System.exit(status);
+            }
+            return;
+        }
         var context = application(args).run(args);
         var stdio = context.getBeanProvider(GroundedStdioRuntime.class).getIfAvailable();
         if (stdio == null) {

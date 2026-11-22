@@ -29,6 +29,8 @@ The default runtime is offline from live providers: NVIDIA-backed embedding, rer
 
 ## Policy Ingest
 
+Use `java -jar target/policynim.jar policies validate --source --corpus-root=/absolute/path/to/policies` to inspect a plain Markdown directory before ingestion. The command can run without JDBC or provider credentials. [List policies and inspect their revisions](docs/hosted-runbook.md#inspect-a-local-policy-directory)
+
 Build the application jar, configure JDBC storage, then populate the policy chunk table:
 
 ```bash

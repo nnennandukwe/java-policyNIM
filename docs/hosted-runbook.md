@@ -113,6 +113,20 @@ export POLICYNIM_PROVIDER_NVIDIA_ENABLED=true
 export POLICYNIM_PROVIDER_NVIDIA_API_KEY=replace-with-runtime-secret
 ```
 
+## Inspect a local policy directory
+
+Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Select a directory without a root `pack.toml`. The command reads nested Markdown, skips `TEMPLATE.md`, and exits after printing its result. For a path relative to the current directory, use the same working directory for all three commands.
+
+```bash
+java -jar /app/policynim.jar policies validate --source --corpus-root=/work/policies --format json
+java -jar /app/policynim.jar policies list --source --corpus-root=/work/policies
+java -jar /app/policynim.jar policies show OPS-RECOVERY-001 --source --corpus-root=/work/policies --format json
+```
+
+Use an ID from `list` for the last command. Case counts. The content revision hashes the original bytes, including line endings. The target digest also covers the normalized policy metadata, body and relative path. The catalog digest covers every selected entry in policy-ID order. A source inspection reports `scope=source`, `generation_id=null` and an unknown indexed count.
+
+If a file can't be read or two entries declare the same ID, fix the reported source and rerun `validate`. JSON mode returns one error object on stdout and exit 1 for an invalid source. Command usage errors go to stderr with exit 2. A file alias must resolve within the selected root. Inspect an operator-controlled directory while its contents are stable. The command reports a detected change during capture.
+
 ## Ingest Policies
 
 After JDBC storage is configured, load the policy corpus before serving MCP traffic:

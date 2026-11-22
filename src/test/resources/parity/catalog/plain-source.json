@@ -1,0 +1,84 @@
+{
+  "files": {
+    "teams/eu/review/nested/notes.md": "﻿---\r\npolicy_id: OPS-É\r\ndomain: review\r\ntags: [prüfen, \"phase 2\"]\r\ngrounded_in: [fixture]\r\n---\r\nCafé 東京\r\n=======\r\nUse \"confirm\" at C:\\stage.\r\n",
+    "TEMPLATE.md": "---\nunfinished template\n",
+    "api/tasks.md": "# Tasks\n"
+  },
+  "catalog": {
+    "schema_version": 1,
+    "scope": "source",
+    "generation_id": null,
+    "digest": "sha256:08f736babf5329562068c73e60e8f3fa8f447c3e89ca174751afe36e029b57f8",
+    "profile_id": null,
+    "profile_digest": null,
+    "pack_pins": [],
+    "authored_count": 2,
+    "effective_count": 2,
+    "indexed_count": null,
+    "unlisted_markdown": [],
+    "policies": [
+      {
+        "state": "active",
+        "target_digest": "sha256:e2bcfe20a6a180b224c83d765883ca019d1a3d6f1a138395e95cb572198b7064",
+        "reason": null,
+        "replacement_id": null,
+        "path": "api/tasks.md",
+        "policy": {
+          "policy_id": "API-TASKS",
+          "title": "Tasks",
+          "doc_type": "guidance",
+          "domain": "api",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:8c78633697597050ade157306c7ffe98c2446b6dc1163ee569124ee0296e304c",
+            "pack_id": null,
+            "pack_version": null,
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "# Tasks\n"
+      },
+      {
+        "state": "active",
+        "target_digest": "sha256:c262d76e715b6574a0a8ff4c75e303d92cabe508f8f57b07c9e29375774059f2",
+        "reason": null,
+        "replacement_id": null,
+        "path": "teams/eu/review/nested/notes.md",
+        "policy": {
+          "policy_id": "OPS-É",
+          "title": "Café 東京",
+          "doc_type": "guidance",
+          "domain": "review",
+          "tags": [
+            "prüfen",
+            "phase 2"
+          ],
+          "grounded_in": [
+            "fixture"
+          ],
+          "provenance": {
+            "content_digest": "sha256:42a718ab4bdf43b27377e934199c8e587e7ecd6cf4b8e989809c9358acf4a7c2",
+            "pack_id": null,
+            "pack_version": null,
+            "requirement_level": "unknown",
+            "applicability": [],
+            "grounding_kind": "legacy_unknown",
+            "sources": []
+          }
+        },
+        "body": "Café 東京\n=======\nUse \"confirm\" at C:\\stage.\n"
+      }
+    ]
+  },
+  "single_task_catalog_digest": "sha256:8c0aed1bd0c8930d5c27140b32d67fe0dda219bbd37cba272fb9d99a13684572",
+  "crlf_task": {
+    "content_digest": "sha256:44680704446f6161c00c0b8a4ce454f5a4681118d3f56392908158221f3d4886",
+    "target_digest": "sha256:c63ad2843ad81a269dafda24d62c55dc019d8a39206eb03809399739d0278e06",
+    "catalog_digest": "sha256:46ec0ffd0cf03bb09b479ab13655b43080cd48d71d0936cac6ae64bd851cb24d",
+    "body": "# Tasks\r\n"
+  }
+}
