@@ -126,7 +126,7 @@ public final class SourceCatalogCommand {
         }
     }
 
-    private static String pathForDisplay(String path) {
+    static String pathForDisplay(String path) {
         var display = new StringBuilder(path.length());
         path.codePoints().forEach(point -> {
             switch (Character.getType(point)) {

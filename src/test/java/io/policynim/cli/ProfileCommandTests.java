@@ -55,6 +55,46 @@ class ProfileCommandTests {
     }
 
     @Test
+    void initializesTheBundledProfileAndReportsItsCleanReviewDigest(@TempDir Path dir) throws Exception {
+        Path profile = dir.resolve("a profile.toml");
+        assertThat(run("profile", "init", dir.resolve(".").resolve(profile.getFileName()).toString(), "--format=json")).isZero();
+        var created = json.readTree(out.toByteArray());
+        assertThat(created.required("status").textValue()).isEqualTo("ok");
+        assertThat(created.required("path").textValue()).isEqualTo(profile.toString());
+        assertThat(created.at("/profile/profile_id").textValue()).isEqualTo("local");
+        assertThat(created.at("/profile/packs/0/path").textValue()).isEqualTo("builtin:baseline");
+        assertThat(created.at("/profile/packs/0/policies").size()).isEqualTo(26);
+        byte[] before = Files.readAllBytes(profile);
+        out.reset();
+        assertThat(run("profile", "diff", "--format", "json", profile.toString())).isZero();
+        var diff = json.readTree(out.toByteArray());
+        assertThat(diff.size()).isEqualTo(10);
+        assertThat(diff.required("review_digest").textValue()).isEqualTo("sha256:03608405e3f4d88f2522d1b2bcea206f9f6cc7ca94f8a4dddd5543080adaf85f");
+        assertThat(diff.required("current_policies").size()).isEqualTo(26);
+        assertThat(diff.required("validation_error").isNull()).isTrue();
+        assertThat(diff.required("changed_packs").isEmpty()).isTrue();
+        assertThat(Files.readAllBytes(profile)).isEqualTo(before);
+        assertThat(err.size()).isZero();
+    }
+
+    @Test
+    void rejectsInitOnlyFlagsOnDiffAndKeepsDomainErrorsOnJsonStdout(@TempDir Path dir) throws Exception {
+        Path path = dir.resolve("existing.toml");
+        byte[] original = "operator notes".getBytes(UTF_8);
+        Files.write(path, original);
+        assertThat(run("profile", "diff", path.toString(), "--pack", "elsewhere")).isEqualTo(2);
+        assertThat(run("profile", "preview", path.toString(), "--id=test")).isEqualTo(2);
+        assertThat(run("profile", "init", path.toString(), "--pack")).isEqualTo(2);
+        err.reset();
+        assertThat(run("profile", "init", path.toString(), "--format=json")).isOne();
+        var error = json.readTree(out.toByteArray());
+        assertThat(error.size()).isEqualTo(2);
+        assertThat(error.required("message").textValue()).contains("already exists");
+        assertThat(Files.readAllBytes(path)).isEqualTo(original);
+        assertThat(err.size()).isZero();
+    }
+
+    @Test
     void helpAndUsageErrorsPrecedeProfileLookup() {
         assertThat(run("profile", "preview", "--help")).isZero();
         assertThat(out.toString(UTF_8)).contains("preview", "validate", "--format");
