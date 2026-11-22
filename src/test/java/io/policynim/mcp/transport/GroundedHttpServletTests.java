@@ -3,28 +3,28 @@ package io.policynim.mcp.transport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.modern.server.feature.McpSyncToolRepository;
-import io.modelcontextprotocol.spec.McpSchema;
+import io.policynim.config.PolicyNimProperties;
 import jakarta.servlet.ServletOutputStream;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 class GroundedHttpServletTests {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private static GroundedHttpServlet servlet() {
-        var settings = mock(McpServerSettings.class);
-        when(settings.serverInfo()).thenReturn(new McpSchema.Implementation("fixture", "1"));
-        when(settings.requestTimeout()).thenReturn(Duration.ofSeconds(3));
+        var settings = new McpServerSettings(new MockEnvironment()
+            .withProperty("spring.ai.mcp.server.name", "fixture")
+            .withProperty("spring.ai.mcp.server.version", "1")
+            .withProperty("spring.ai.mcp.server.request-timeout", "3s"), new PolicyNimProperties());
         return new GroundedHttpConfiguration().groundedHttpServlet(new StreamableHttpTransportMarker("/policy"),
             settings, new GroundedHttpAuthorities("127.0.0.1", () -> 8080, false, null), List.of(), mock(McpSyncToolRepository.class));
     }
