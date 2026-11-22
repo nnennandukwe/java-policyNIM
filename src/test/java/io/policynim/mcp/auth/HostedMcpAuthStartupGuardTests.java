@@ -12,11 +12,10 @@ class HostedMcpAuthStartupGuardTests {
     @Test
     void failsClosedWhenStreamableHttpBearerAuthIsEnabledWithoutAToken() {
         PolicyNimProperties properties = new PolicyNimProperties();
-        properties.getMcp().setTransport(McpTransport.STREAMABLE_HTTP);
         properties.getMcp().getAuth().setEnabled(true);
         properties.getMcp().getAuth().setBearerToken(" ");
 
-        assertThatThrownBy(() -> new HostedMcpAuthStartupGuard(properties).afterSingletonsInstantiated())
+        assertThatThrownBy(() -> new HostedMcpAuthStartupGuard(properties, McpTransport.STREAMABLE_HTTP).afterSingletonsInstantiated())
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("policynim.mcp.auth.bearer-token")
             .hasMessageContaining("streamable HTTP");
@@ -25,20 +24,18 @@ class HostedMcpAuthStartupGuardTests {
     @Test
     void allowsStdioWithoutABearerToken() {
         PolicyNimProperties properties = new PolicyNimProperties();
-        properties.getMcp().setTransport(McpTransport.STDIO);
         properties.getMcp().getAuth().setEnabled(true);
 
-        assertThatCode(() -> new HostedMcpAuthStartupGuard(properties).afterSingletonsInstantiated())
+        assertThatCode(() -> new HostedMcpAuthStartupGuard(properties, McpTransport.STDIO).afterSingletonsInstantiated())
             .doesNotThrowAnyException();
     }
 
     @Test
     void allowsDisabledBearerAuthWithoutAToken() {
         PolicyNimProperties properties = new PolicyNimProperties();
-        properties.getMcp().setTransport(McpTransport.STREAMABLE_HTTP);
         properties.getMcp().getAuth().setEnabled(false);
 
-        assertThatCode(() -> new HostedMcpAuthStartupGuard(properties).afterSingletonsInstantiated())
+        assertThatCode(() -> new HostedMcpAuthStartupGuard(properties, McpTransport.STREAMABLE_HTTP).afterSingletonsInstantiated())
             .doesNotThrowAnyException();
     }
 }

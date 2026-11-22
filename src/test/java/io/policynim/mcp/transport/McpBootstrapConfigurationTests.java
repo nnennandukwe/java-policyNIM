@@ -35,6 +35,28 @@ class McpBootstrapConfigurationTests {
             });
     }
 
+    @Test
+    void reportsTheTransportAndEndpointSelectedByExplicitSpringProperties() {
+        contextRunner.withPropertyValues(
+            "policynim.mcp.transport=stdio",
+            "spring.ai.mcp.server.stdio=false",
+            "spring.ai.mcp.server.streamable-http.mcp-endpoint=/policies"
+        ).run(context -> {
+            McpServerBootstrap bootstrap = context.getBean(McpServerBootstrap.class);
+            assertThat(bootstrap.transport()).isEqualTo(McpTransport.STREAMABLE_HTTP);
+            assertThat(bootstrap.description()).contains("/policies");
+            assertThat(context.getBean(StreamableHttpTransportMarker.class).path()).isEqualTo("/policies");
+        });
+    }
+
+    @Test
+    void explicitSpringStdioOmitsTheHttpMarker() {
+        contextRunner.withPropertyValues("spring.ai.mcp.server.stdio=true").run(context -> {
+            assertThat(context.getBean(McpServerBootstrap.class).transport()).isEqualTo(McpTransport.STDIO);
+            assertThat(context).doesNotHaveBean(StreamableHttpTransportMarker.class);
+        });
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableConfigurationProperties(PolicyNimProperties.class)
     static class TestPropertiesConfiguration {
