@@ -48,7 +48,6 @@ final class PlainSourceDirectory {
                 }
                 throw new InvalidPolicyDocumentException("Policy root " + selected + " isn't a directory.");
             }
-            refuseManifest(root);
             new PlainSourceDirectory(root, reader).visit(root);
             if (!selected.toRealPath().equals(root)) {
                 throw changed(root.getFileName().toString());
@@ -74,6 +73,9 @@ final class PlainSourceDirectory {
         BasicFileAttributes before = attributes(directory);
         if (!before.isDirectory() || !directory.toRealPath().equals(directory)) {
             throw changed(sourcePath(directory));
+        }
+        if (directory.equals(root)) {
+            refuseManifest(root);
         }
         List<Path> children = new ArrayList<>();
         try (var stream = Files.newDirectoryStream(directory)) {

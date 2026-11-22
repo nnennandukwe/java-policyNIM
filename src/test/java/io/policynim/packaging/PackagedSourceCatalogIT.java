@@ -104,10 +104,10 @@ class PackagedSourceCatalogIT {
             assertTrue(help.stdout().contains("--source") && help.stdout().contains("--corpus-root")
                 && help.stdout().contains("--format"));
             String selector = "--corpus-root=" + directory.resolve("policies");
-            assertNotEquals(0, cli.run("policies", "validate", selector).exit());
-            assertNotEquals(0, cli.run("policies", "list", "--source").exit());
-            assertNotEquals(0, cli.run("policies", "show", "--source", selector).exit());
-            assertNotEquals(0, cli.run("policies", "list", "--source", selector, "--format", "xml").exit());
+            cli.run("policies", "validate", selector).assertUsageError();
+            cli.run("policies", "list", "--source").assertUsageError();
+            cli.run("policies", "show", "--source", selector).assertUsageError();
+            cli.run("policies", "list", "--source", selector, "--format", "xml").assertUsageError();
         }
     }
 
@@ -149,6 +149,12 @@ class PackagedSourceCatalogIT {
     }
 
     private record Reply(int exit, String stdout, String stderr) {
+
+        void assertUsageError() {
+            assertNotEquals(0, exit);
+            assertTrue(stdout.isBlank());
+            assertTrue(stderr.contains("Usage:") && stderr.contains("policies"));
+        }
 
         JsonNode json(int expectedExit) throws IOException {
             assertEquals(expectedExit, exit);

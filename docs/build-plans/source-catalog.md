@@ -105,6 +105,16 @@ jar tf target/policynim.jar
 git diff --check
 ```
 
+### Run the installed comparison
+
+Set `python` to the interpreter from a disposable install of Python PolicyNIM at `fcc5322a6672b0275dcc6e0c299e631df8e8de19`. Install its lockfile and keep its CLI next to that interpreter. Run the following from the Java checkout after packaging.
+
+```bash
+"$python" src/test/parity/source_catalog.py --jar target/policynim.jar
+```
+
+The paired check validates both command outputs against the committed fixture and records the jar and input checksums. It checks UTF-8 source text, error status and output channels, retries, and read-only behavior from isolated working directories.
+
 ## Definition Of Done
 
 The installed Java and Python commands agree on the plain-directory JSON shapes, source selections, metadata, bodies and digest bytes for the committed fixtures. A rejected source returns a useful failure, leaves the source/store untouched and succeeds after correction. The packaged Java ingest and MCP regressions pass. Record the reviewed and merged revisions, hosted gates and independently exercised merge artifact against the named parts of G08/G09/O04. Leave pack/profile, chunk and retained-generation outcomes with their owning units.

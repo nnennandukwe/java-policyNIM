@@ -157,7 +157,7 @@ def check_recovery(cli, fixture):
 
 def exercise(cli, fixture):
     """Compare complete success and error shapes for the same authored files."""
-    cli.root.parent.mkdir(parents=True)
+    cli.root.parent.mkdir(parents=True, exist_ok=True)
     root_errors = {"missing": cli.error("validate", fragments=[cli.root.name])}
     cli.root.write_bytes(b"not a directory")
     root_errors["nonDirectory"] = cli.error("validate", fragments=[cli.root.name])
