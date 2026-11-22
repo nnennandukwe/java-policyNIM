@@ -1,5 +1,6 @@
 package io.policynim;
 
+import io.policynim.cli.ProfileCommand;
 import io.policynim.cli.SourceCatalogCommand;
 import io.policynim.ingest.IngestCommandLine;
 import io.policynim.mcp.transport.GroundedStdioRuntime;
@@ -28,11 +29,12 @@ import java.util.Map;
 public class PolicyNimApplication {
 
     public static void main(String[] args) {
-        if (SourceCatalogCommand.isSourceCatalogCommand(args)) {
+        boolean policies = SourceCatalogCommand.isSourceCatalogCommand(args);
+        if (policies || ProfileCommand.isProfileCommand(args)) {
             // Policy text and JSON use UTF-8 even when the launch locale sets stdout to ASCII.
             var output = new PrintStream(System.out, true, StandardCharsets.UTF_8);
             var errors = new PrintStream(System.err, true, StandardCharsets.UTF_8);
-            int status = SourceCatalogCommand.run(args, output, errors);
+            int status = policies ? SourceCatalogCommand.run(args, output, errors) : ProfileCommand.run(args, output, errors);
             if (status != 0) {
                 System.exit(status);
             }

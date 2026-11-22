@@ -18,16 +18,20 @@ public final class SourceCatalogCommand {
           validate           Check source metadata and revisions.
           list               List the selected policies.
           show <policy ID>   Show an exact policy ID and its Markdown body.
-          --source           Inspect the shipped policies or the directory in POLICYNIM_CORPUS_DIR.
+          --source           Inspect the configured profile, selected directory or shipped policies.
           --corpus-root      Select a local directory for this command.
         """;
 
     private SourceCatalogCommand() { }
 
     public static boolean isSourceCatalogCommand(String[] args) {
+        return matchesFirstOperand(args, "policies");
+    }
+
+    static boolean matchesFirstOperand(String[] args, String command) {
         for (String arg : args) {
             if (!arg.startsWith("-")) {
-                return arg.equals("policies");
+                return arg.equals(command);
             }
         }
         return false;
@@ -83,6 +87,10 @@ public final class SourceCatalogCommand {
             output.printf("%s: %s%nScope: source; generation: unknown%nSource: %s; state: %s%n",
                 policy.get("policy_id").textValue(), policy.get("title").textValue(),
                 pathForDisplay(view.get("path").textValue()), view.get("state").textValue());
+            JsonNode reason = view.get("reason");
+            if (reason != null && reason.isTextual() && !reason.textValue().isEmpty()) {
+                output.println("Decision: " + reason.textValue());
+            }
             JsonNode provenance = policy.get("provenance");
             output.printf("Revision: %s%nGrounding: %s%n", provenance.get("content_digest").textValue(),
                 provenance.get("grounding_kind").textValue());
