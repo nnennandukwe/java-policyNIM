@@ -55,7 +55,9 @@ sealed interface PackLocation {
         try {
             return new Local(profileFile.toAbsolutePath().getParent().resolve(normalized).toRealPath());
         } catch (NoSuchFileException missing) {
-            throw missingManifest();
+            throw new InvalidPolicyDocumentException(
+                "Selected pack directory doesn't exist. Check the profile path to the directory containing pack.toml.",
+                missing);
         } catch (IOException | InvalidPathException error) {
             throw new InvalidPolicyDocumentException(
                 "Selected pack path couldn't be resolved. Check local paths, symlinks, and permissions.", error);

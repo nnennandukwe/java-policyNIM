@@ -51,6 +51,25 @@ class CapturedPackTests {
     }
 
     @Test
+    void identifiesTheMissingDirectoryBeforeCheckingItsManifestAndAllowsBothRetries() throws Exception {
+        var fixture = new ObjectMapper().readTree(getClass().getResource("/parity/catalog/explicit-logging.json"));
+        Path profile = root.resolve("profile.toml");
+        String selection = "private-pack";
+        assertThatThrownBy(() -> PackLocation.resolve(profile, selection))
+            .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("directory doesn't exist")
+            .hasMessageContaining("pack.toml").hasMessageNotContaining(selection).hasMessageNotContaining(root.toString());
+
+        Path pack = Files.createDirectory(root.resolve(selection));
+        var location = PackLocation.resolve(profile, selection);
+        assertThatThrownBy(() -> SourceCatalog.capturePack(location))
+            .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("require pack.toml")
+            .hasMessageNotContaining(selection).hasMessageNotContaining(root.toString());
+        Files.writeString(pack.resolve("pack.toml"), fixture.required("manifest").textValue());
+        Files.writeString(pack.resolve("policy.md"), fixture.required("member").textValue());
+        assertThat(SourceCatalog.capturePack(location).digest()).isEqualTo(fixture.at("/catalog/digest").textValue());
+    }
+
+    @Test
     void capturesTheInstalledTopicUsingItsOwnManifestAndRelativePaths() {
         var pack = SourceCatalog.capturePack(PackLocation.resolve(root.resolve("any.toml"), "builtin:api"));
         assertThat(pack.packId()).isEqualTo("policynim.api");
