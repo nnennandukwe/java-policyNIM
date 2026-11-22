@@ -181,6 +181,49 @@ class SessionHttpServletTests {
         }
     }
 
+    @Test
+    void headKeepsTheExistingSessionListenerAndTheSessionUsable() throws Exception {
+        var transport = new SessionHttpServlet("/mcp", Duration.ofMinutes(30), null, false);
+        var server = McpServer.sync(transport).serverInfo("fixture", "1").build();
+        try {
+            String session = post(transport, INITIALIZE, null).getHeader(HttpHeaders.MCP_SESSION_ID);
+            var listener = sessionRequest("GET", session);
+            var listening = new MockHttpServletResponse();
+            transport.service(listener, listening);
+            assertThat(listening.getStatus()).isEqualTo(200);
+            assertThat(listener.isAsyncStarted()).isTrue();
+
+            var head = sessionRequest("HEAD", session);
+            var rejected = new MockHttpServletResponse();
+            transport.service(head, rejected);
+            assertThat(rejected.getStatus()).isEqualTo(405);
+            assertThat(rejected.getHeader("Allow")).contains("GET", "POST", "DELETE").doesNotContain("HEAD");
+            assertThat(rejected.getContentAsByteArray()).isEmpty();
+            assertThat(head.isAsyncStarted()).isFalse();
+            assertThat(listener.isAsyncStarted()).isTrue();
+
+            var notification = post(transport, """
+                {"jsonrpc":"2.0","method":"notifications/initialized"}
+                """, session);
+            assertThat(notification.getStatus()).isEqualTo(202);
+            var deleted = new MockHttpServletResponse();
+            transport.service(sessionRequest("DELETE", session), deleted);
+            assertThat(deleted.getStatus()).isEqualTo(200);
+            assertThat(listener.isAsyncStarted()).isFalse();
+        }
+        finally {
+            server.closeGracefully();
+        }
+    }
+
+    private static MockHttpServletRequest sessionRequest(String method, String session) {
+        var request = new MockHttpServletRequest(method, "/mcp");
+        request.setAsyncSupported(true);
+        request.addHeader("Accept", "text/event-stream");
+        request.addHeader(HttpHeaders.MCP_SESSION_ID, session);
+        return request;
+    }
+
     private static MockHttpServletResponse post(SessionHttpServlet transport, String body, String session) throws Exception {
         var request = initializeRequest();
         request.setContent(body.getBytes(StandardCharsets.UTF_8));

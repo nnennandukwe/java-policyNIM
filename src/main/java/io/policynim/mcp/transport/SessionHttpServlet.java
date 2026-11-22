@@ -98,6 +98,12 @@ final class SessionHttpServlet extends HttpServlet implements McpStreamableServe
 
     @Override
     protected void service(HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+        // The servlet default routes HEAD through GET, which would replace the session's listener.
+        if ("HEAD".equals(request.getMethod())) {
+            response.setHeader("Allow", disallowDelete ? "GET, POST" : "GET, POST, DELETE");
+            response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+            return;
+        }
         if ("POST".equals(request.getMethod()) && request.getContentLengthLong() > REQUEST_MAX_BYTES) {
             response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
             return;

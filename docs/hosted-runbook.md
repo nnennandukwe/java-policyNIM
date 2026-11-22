@@ -65,7 +65,7 @@ Set `spring.ai.mcp.server.stdio=true` to select stdio or `false` to select HTTP.
 
 ## Connect an existing HTTP client
 
-The default Streamable HTTP endpoint is `/mcp`. Initialize a session and send its `Mcp-Session-Id` header on subsequent requests. If bearer authentication is enabled, each request also needs its bearer token. A missing session ID returns 400. An unknown, deleted, or expired session ID returns 404. Initialize a fresh session to recover.
+The default Streamable HTTP endpoint is `/mcp`. Initialize a session and send its `Mcp-Session-Id` header on subsequent requests. If bearer authentication is enabled, each request also needs its bearer token. A missing session ID returns 400. An unknown, deleted, or expired session ID returns 404. Initialize a fresh session to recover. Use `GET /livez` for liveness probes. An authorized HEAD request to the session endpoint returns 405 and leaves the client's event stream open.
 
 By default, the maintenance timer checks idle sessions every 30 minutes. The servlet keeps active requests and attached streams. It pings idle listeners to detect abandoned connections. Set `spring.ai.mcp.server.streamable-http.session-idle-timeout` to a positive duration to change the interval. Clients can release sessions immediately with HTTP DELETE.
 
