@@ -1,0 +1,55 @@
+{
+  "profileId": "review",
+  "packArguments": [
+    "team",
+    "base"
+  ],
+  "profileDestination": "profiles/team.toml",
+  "files": {
+    "base/A.md": "---\npolicy_id: A\ntitle: Reviewed A\ndomain: ops\n---\n# Reviewed A\n",
+    "base/pack.toml": "schema_version = 1\npack_id = \"review.base\"\nversion = \"1.0.0\"\n\n[[policies]]\npolicy_id = \"B\"\npath = \"B.md\"\n\n[[policies]]\npolicy_id = \"A\"\npath = \"A.md\"\n",
+    "base/B.md": "---\npolicy_id: B\ntitle: Reviewed B\ndomain: ops\n---\n# Reviewed B\n",
+    "team/C.md": "---\npolicy_id: C\ntitle: Reviewed C\ndomain: ops\n---\n# Reviewed C\n",
+    "team/pack.toml": "schema_version = 1\npack_id = \"review.team\"\nversion = \"1.0.0\"\n\n[[policies]]\npolicy_id = \"C\"\npath = \"C.md\"\n"
+  },
+  "clean": {
+    "profile_id": "review",
+    "review_digest": "sha256:d2f5197954853f566ad4a404e88da76cb1e925f52cbceb38a545d6ccd000233d",
+    "added": [],
+    "changed": [],
+    "removed": [],
+    "changed_packs": [],
+    "invalidated_decisions": [],
+    "validation_error": null,
+    "warnings": [],
+    "memberCount": 3,
+    "membersSha256": "sha256:08a450e96bdc19240bd8eb3c93539d8fc1ee962b52d30bde21697b5e76cf7cd4"
+  },
+  "editExpected": {
+    "profile_id": "review",
+    "review_digest": "sha256:4db20130b673825dbe8d7cee34bbec7d5d9af9e9ede5469765dd8d869906a32e",
+    "added": [
+      "D"
+    ],
+    "changed": [
+      "A"
+    ],
+    "removed": [
+      "B"
+    ],
+    "changed_packs": [
+      "review.base"
+    ],
+    "invalidated_decisions": [],
+    "validation_error": null,
+    "warnings": [],
+    "memberCount": 3,
+    "membersSha256": "sha256:c3aed1d99369526c8059c8178088b1ed1924371e5b2b1ca93c20e69d748f92cb"
+  },
+  "authoredProfile": "schema_version = 1\nprofile_id = \"review\"\n\n[[packs]]\npath = \"../team\"\npack_id = \"review.team\"\nversion = \"1.0.0\"\ndigest = \"sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57\"\n\n[packs.policies]\nC = \"sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57\"\n\n[[packs]]\npath = \"../base\"\npack_id = \"review.base\"\nversion = \"1.0.0\"\ndigest = \"sha256:dbc9af11cdda70b575d33126001cef97b68bad256d674469abc0cae6e65dda0e\"\n\n[packs.policies]\nA = \"sha256:4b8fb34ea4bc5f88f2ad75fea032c81853f3c4566f7ee333d3bf7f8fa9b227d8\"\nB = \"sha256:1c5b714c3ba0a9c3c1758907a31a74cc66a812ae8c4a3a3031e2975ed97a03ec\"\n",
+  "edit": {
+    "base/pack.toml": "schema_version = 1\npack_id = \"review.base\"\nversion = \"1.0.0\"\n\n[[policies]]\npolicy_id = \"D\"\npath = \"D.md\"\n\n[[policies]]\npolicy_id = \"A\"\npath = \"A.md\"\n",
+    "base/A.md": "---\npolicy_id: A\ntitle: Reviewed A\ndomain: ops\n---\n# Reviewed A\nReview limit.\n",
+    "base/D.md": "---\npolicy_id: D\ntitle: Reviewed D\ndomain: ops\n---\n# Reviewed D\n"
+  }
+}

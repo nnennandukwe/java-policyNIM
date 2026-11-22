@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /** The validated file model, in the field order used for the portable profile digest. */
 record PolicyProfile(String profileId, List<Pin> packs, List<Decision> exclusions,
                      List<Decision> replacements, List<Conflict> conflicts) {
+    static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9._-]{0,127}");
+
     record Pin(String path, String packId, String version, String digest, Map<String, String> policies) {
         ObjectNode publicFields() {
             return CatalogJson.object().put("path", path).put("pack_id", packId).put("version", version).put("digest", digest);

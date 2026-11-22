@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 
 /** Reads profile fields in model order and reports validation locations without rejected values. */
 record ProfileToml(TomlTable table, String prefix, List<String> errors) {
-    private static final Pattern NAME = Pattern.compile("[a-z0-9][a-z0-9._-]{0,127}");
     private static final Pattern VERSION = Pattern.compile("(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*)){2}");
     private static final Pattern DIGEST = Pattern.compile("sha256:[0-9a-f]{64}");
     // Profile Text strips Unicode White_Space, including NEL and excluding the ASCII information separators.
@@ -28,25 +27,32 @@ record ProfileToml(TomlTable table, String prefix, List<String> errors) {
     private static final Pattern SAFE_FIELD = Pattern.compile("[A-Za-z_][A-Za-z_0-9-]{0,63}");
     private static final String UNREADABLE = "Couldn't read profile TOML. Check the profile path, permissions, and TOML syntax.";
 
+    record Document(PolicyProfile profile, String text) { }
+
     static PolicyProfile read(Path file) {
+        return document(file).profile();
+    }
+
+    static Document document(Path file) {
         if (!Files.isRegularFile(file)) {
             throw new InvalidPolicyDocumentException(UNREADABLE);
         }
         TomlTable table;
+        String text;
         try {
-            String text = Files.readString(file).replace("\r\n", "\n").replace('\r', '\n');
+            text = Files.readString(file).replace("\r\n", "\n").replace('\r', '\n');
             table = PolicyPackToml.decode(text.getBytes(StandardCharsets.UTF_8));
         } catch (IOException | InvalidPolicyDocumentException error) {
             throw new InvalidPolicyDocumentException(UNREADABLE, error);
         }
-        return new ProfileToml(table, "", new ArrayList<>()).profile();
+        return new Document(new ProfileToml(table, "", new ArrayList<>()).profile(), text);
     }
 
     private PolicyProfile profile() {
         if (!Long.valueOf(1).equals(table.get("schema_version"))) {
             error("schema_version");
         }
-        String id = text("profile_id", NAME);
+        String id = text("profile_id", PolicyProfile.NAME);
         var packs = tables("packs", true, ProfileToml::pin);
         var exclusions = tables("exclusions", false, fields -> fields.decision(false));
         var replacements = tables("replacements", false, fields -> fields.decision(true));
@@ -74,7 +80,7 @@ record ProfileToml(TomlTable table, String prefix, List<String> errors) {
                 error("path");
             }
         }
-        var pin = new PolicyProfile.Pin(path, text("pack_id", NAME), text("version", VERSION),
+        var pin = new PolicyProfile.Pin(path, text("pack_id", PolicyProfile.NAME), text("version", VERSION),
             text("digest", DIGEST), revisions());
         keys(Set.of("path", "pack_id", "version", "digest", "policies"));
         return pin;
