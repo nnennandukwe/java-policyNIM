@@ -8,6 +8,8 @@ import io.modelcontextprotocol.spec.McpSchema;
 import io.policynim.preflight.PreflightRequest;
 import io.policynim.preflight.PreflightResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.util.List;
 import java.util.Map;
@@ -19,6 +21,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 class PolicyMcpToolSpecificationConfigurationTests {
+
+    @ParameterizedTest
+    @CsvSource({"policy_search, query", "policy_preflight, task"})
+    void reportsTheMissingRequiredFieldWhenArgumentsAreOmitted(String toolName, String requiredField) {
+        var specifications = new PolicyMcpToolSpecificationConfiguration()
+            .policySyncToolSpecifications(mock(PolicyMcpTools.class), new ObjectMapper());
+        var tool = specifications.stream().filter(spec -> spec.tool().name().equals(toolName)).findFirst().orElseThrow();
+
+        var result = tool.callHandler().apply(null, McpSchema.CallToolRequest.builder(toolName).build());
+
+        String message = requiredField + " must not be blank";
+        assertThat(result.isError()).isTrue();
+        assertThat(result.structuredContent()).isEqualTo(Map.of("error", message));
+        assertThat(result.content()).singleElement().isInstanceOfSatisfying(McpSchema.TextContent.class,
+            text -> assertThat(text.text()).isEqualTo(message));
+    }
 
     @Test
     void convertsReadinessFailuresIntoMcpErrorResultsWithRecoveryText() {

@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 @Configuration(proxyBeanMethods = false)
 public class PolicyMcpToolSpecificationConfiguration {
@@ -38,10 +38,11 @@ public class PolicyMcpToolSpecificationConfiguration {
                 ),
                 (exchange, request) -> invokeTool(
                     objectMapper,
-                    () -> tools.policySearch(
-                        requiredString(request.arguments(), "query"),
-                        optionalString(request.arguments(), "domain"),
-                        optionalInteger(request.arguments(), "topK")
+                    request,
+                    arguments -> tools.policySearch(
+                        requiredString(arguments, "query"),
+                        optionalString(arguments, "domain"),
+                        optionalInteger(arguments, "topK")
                     )
                 )
             ),
@@ -58,10 +59,11 @@ public class PolicyMcpToolSpecificationConfiguration {
                 ),
                 (exchange, request) -> invokeTool(
                     objectMapper,
-                    () -> tools.policyPreflight(
-                        requiredString(request.arguments(), "task"),
-                        optionalString(request.arguments(), "domain"),
-                        optionalInteger(request.arguments(), "topK")
+                    request,
+                    arguments -> tools.policyPreflight(
+                        requiredString(arguments, "task"),
+                        optionalString(arguments, "domain"),
+                        optionalInteger(arguments, "topK")
                     )
                 )
             )
@@ -119,9 +121,14 @@ public class PolicyMcpToolSpecificationConfiguration {
         }
     }
 
-    private static McpSchema.CallToolResult invokeTool(ObjectMapper objectMapper, Supplier<Object> invocation) {
+    private static McpSchema.CallToolResult invokeTool(
+        ObjectMapper objectMapper,
+        McpSchema.CallToolRequest request,
+        Function<Map<String, Object>, Object> invocation
+    ) {
         try {
-            return toolResult(objectMapper, invocation.get());
+            Map<String, Object> arguments = request.arguments() == null ? Map.of() : request.arguments();
+            return toolResult(objectMapper, invocation.apply(arguments));
         }
         catch (McpToolInvocationException | IllegalArgumentException exception) {
             return toolError(exception.getMessage());
