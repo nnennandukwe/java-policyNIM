@@ -18,10 +18,11 @@ class SourceMarkdownParserTests {
         assertThat(document.bodyStartLine()).isEqualTo(5);
         assertThat(document.metadata().groundedIn()).containsExactly("source");
 
-        String misplaced = policy.replace("grounded_in:", "provenance:");
+        String misplaced = policy.replace("grounded_in: [source]", "provenance: SYNTHETIC-SOURCE-VALUE");
         assertThatThrownBy(() -> parser.parsePackMember("policies/rule.md", misplaced))
             .isInstanceOf(InvalidPolicyDocumentException.class)
-            .hasMessageContaining("unsupported frontmatter keys: provenance");
+            .hasMessageContaining("unsupported frontmatter keys: provenance")
+            .hasMessageNotContaining("SYNTHETIC-SOURCE-VALUE");
         assertThat(parser.parse("policies/rule.md", misplaced).bodyStartLine()).isEqualTo(5);
     }
 

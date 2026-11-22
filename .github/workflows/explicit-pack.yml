@@ -1,0 +1,45 @@
+name: explicit pack platforms
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  installed-pack:
+    name: explicit pack on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            shell: bash
+            wrapper: ./mvnw
+          - os: windows-2025
+            shell: pwsh
+            wrapper: .\mvnw.cmd
+    env:
+      POLICYNIM_PROVIDER_NVIDIA_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Set up Java
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Verify pack file access on the host
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests" test
+      - name: Package the installed jar
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
+      - name: Inspect an explicit pack through the installed jar
+        shell: ${{ matrix.shell }}
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dit.test=PackagedExplicitPackIT" failsafe:integration-test failsafe:verify

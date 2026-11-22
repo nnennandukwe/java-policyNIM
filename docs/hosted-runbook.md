@@ -115,7 +115,7 @@ export POLICYNIM_PROVIDER_NVIDIA_API_KEY=replace-with-runtime-secret
 
 ## Inspect a local policy directory
 
-Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Put `policies` immediately after the jar path. Select a directory without a root `pack.toml`. The command reads nested Markdown, skips `TEMPLATE.md`, and exits after printing its result. For a path relative to the current directory, use the same working directory for all three commands.
+Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Put `policies` immediately after the jar path. Select a directory containing policy Markdown. When a root `pack.toml` is present, the command reads the declared policy members. In a plain directory it reads nested Markdown and skips `TEMPLATE.md`. For a path relative to the current directory, use the same working directory for all three commands.
 
 ```bash
 java -jar /app/policynim.jar policies validate --source --corpus-root=/work/policies --format json
@@ -126,6 +126,21 @@ java -jar /app/policynim.jar policies show OPS-RECOVERY-001 --source --corpus-ro
 Copy the ID from `list` exactly, including uppercase and lowercase letters. On Linux, use a UTF-8 locale when a policy ID or path contains non-ASCII characters. For example, prefix the command with `LC_ALL=C.UTF-8` on Ubuntu. The jar writes policy text and JSON in UTF-8.
 
 The content revision hashes the original bytes, including line endings. The target digest also covers the normalized policy metadata, body and relative path. The catalog digest covers every selected entry in policy-ID order. A source inspection reports `scope=source`, `generation_id=null` and an unknown indexed count.
+
+For an explicit pack, point `--corpus-root` at the directory containing `pack.toml`. Text `list` shows the pack ID and version beside each selected policy. JSON `show` includes its declared requirement level, applicability, grounding and source references. `validate --format json` lists unselected Markdown paths under `unlisted_markdown`. A Markdown file under a pack contributes to the catalog only when its manifest names it. Store provenance in the manifest and use the same policy ID in the member and its Markdown. [Pack fields and example](build-plans/explicit-policy-pack.md#canonical-contracts)
+
+For example, if `ops/recovery.md` declares `policy_id: OPS-RECOVERY-001`, this `pack.toml` selects it for the three commands above.
+
+```toml
+schema_version = 1
+pack_id = "team.operations"
+version = "1.0.0"
+
+[[policies]]
+policy_id = "OPS-RECOVERY-001"
+path = "ops/recovery.md"
+requirement_level = "recommended"
+```
 
 If a file can't be read or two entries declare the same ID, fix the reported source and rerun `validate`. JSON mode returns one error object on stdout and exit 1 for an invalid source. Command usage errors go to stderr with exit 2. A file alias must resolve within the selected root. Inspect an operator-controlled directory while its contents are stable. The command reports a detected change during capture.
 

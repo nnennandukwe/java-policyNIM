@@ -1,0 +1,89 @@
+{
+  "manifest": "schema_version = 1\npack_id = \"team.logging\"\nversion = \"1.0.0\"\n[[policies]]\npolicy_id = \"LOG-001\"\npath = \"policy.md\"\nrequirement_level = \"recommended\"\napplicability = [\"backend\"]\ngrounding_kind = \"adaptation\"\n[[policies.sources]]\ntitle = \"Logging reference\"\nurl = \"https://example.com/logging\"\nrevision = \"revision-1\"\nsections = [\"2.1\"]\nretrieved_on = 2026-09-01\nlicense = \"CC-BY-4.0\"\nattribution = \"Example Authors\"\nchange_notice = \"Adapted to require request identifiers.\"\n",
+  "member": "---\npolicy_id: LOG-001\ntitle: Logging\ndomain: backend\n---\n# Logging\n\n## Rules\nInclude request identifiers.\n",
+  "manifest_sha256": "sha256:5919c0586a818eb7e15f278acfe10340cab9b65f027d806768e3a15232748e12",
+  "catalog": {
+    "schema_version": 1,
+    "scope": "source",
+    "generation_id": null,
+    "digest": "sha256:bc4731408060f1f3c18ba03fb6a1cf93c93771aca48e45ef6bb100c5503930ff",
+    "profile_id": null,
+    "profile_digest": null,
+    "pack_pins": [],
+    "authored_count": 1,
+    "effective_count": 1,
+    "indexed_count": null,
+    "unlisted_markdown": [
+      "README.md"
+    ],
+    "policies": [
+      {
+        "state": "active",
+        "target_digest": "sha256:0e8198e1810bf88e4b170ce9277b1e44c166b26eca37f3b48d4e350bf10707b8",
+        "reason": null,
+        "replacement_id": null,
+        "path": "policy.md",
+        "policy": {
+          "policy_id": "LOG-001",
+          "title": "Logging",
+          "doc_type": "guidance",
+          "domain": "backend",
+          "tags": [],
+          "grounded_in": [],
+          "provenance": {
+            "content_digest": "sha256:f139aa277207bd10c787a4df4526a2537b5109f53fcacfd6d2d10f512a204b21",
+            "pack_id": "team.logging",
+            "pack_version": "1.0.0",
+            "requirement_level": "recommended",
+            "applicability": [
+              "backend"
+            ],
+            "grounding_kind": "adaptation",
+            "sources": [
+              {
+                "title": "Logging reference",
+                "url": "https://example.com/logging",
+                "revision": "revision-1",
+                "sections": [
+                  "2.1"
+                ],
+                "retrieved_on": "2026-09-01",
+                "license": "CC-BY-4.0",
+                "attribution": "Example Authors",
+                "change_notice": "Adapted to require request identifiers."
+              }
+            ]
+          }
+        },
+        "body": "# Logging\n\n## Rules\nInclude request identifiers.\n"
+      }
+    ]
+  },
+  "leap_date": {
+    "catalog_digest": "sha256:1dc0841666caa5921fb51847f4d82c678862da0e1ab9105aea6bb18ff1e1f550",
+    "target_digest": "sha256:9f8274bcecc76b3db11fd2f0757a8574d87c0ff7bdd8239e174e9342284a4c96"
+  },
+  "member_locations": {
+    "members/policy.md": {
+      "target_digest": "sha256:4a99742e9754621a748b835139f02c70b966f86cf1cab09b1d339e03a8f74ac0",
+      "catalog_digest": "sha256:aee1beda05d3ba3265836f1498529bd414b84fefd4001ea0630b1e9ba038d82a"
+    },
+    "alias.md": {
+      "target_digest": "sha256:369162ee50aedd24151749672d2744165cf0d6f8c9f22c4fc108c6f0ba1aad7a",
+      "catalog_digest": "sha256:cb3f6a6a6c24b159d6b0ac2e9d205980789fbd6a7c212de864aeac4686b8f7a6"
+    },
+    "linked/policy.md": {
+      "target_digest": "sha256:0b966d29faa92b7f2afde19819f9797b1c3491ebe6bbd6d42f48d7761df8c645",
+      "catalog_digest": "sha256:af169297f0d99a6366a5c66ba83c402f3892f09f80f4a4d3713c527089b65e34"
+    }
+  },
+  "hard_links": {
+    "body": "# Shared\n",
+    "source_digest": "sha256:78b2119065eebb2a0306bce4244e4990707e525589f7a3337bd19555fc350944",
+    "targets": {
+      "api/a.md": "sha256:b54593192478c961912f89e6e5cd6994722c7774ba4828ed0f6d11b6709210de",
+      "api/b.md": "sha256:28f8e59a9f6dff375c91f4fd0920931da44683d3cfcf02f04923571c77cd44eb"
+    },
+    "catalog_digest": "sha256:4c7bc56cfef4a0dfac4a042432832a4a207f90f46183fa7a94b898b7eed5d604"
+  }
+}

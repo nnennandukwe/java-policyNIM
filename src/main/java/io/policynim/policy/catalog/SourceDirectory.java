@@ -17,7 +17,7 @@ import java.util.Set;
 import static java.nio.file.LinkOption.NOFOLLOW_LINKS;
 import static java.nio.file.StandardOpenOption.READ;
 
-final class PlainSourceDirectory {
+final class SourceDirectory {
 
     private static final String ROOT_HINT = " Pass a directory of policy Markdown files with --corpus-root=<path>.";
 
@@ -26,58 +26,67 @@ final class PlainSourceDirectory {
         void accept(String path, String sourcePath, byte[] content);
     }
 
+    private final Path selection;
     private final Path root;
-    private final SourceFile reader;
 
-    private PlainSourceDirectory(Path root, SourceFile reader) {
+    private SourceDirectory(Path selection, Path root) {
+        this.selection = selection;
         this.root = root;
-        this.reader = reader;
     }
 
-    static void forEachFile(Path selected, SourceFile reader) {
+    static SourceDirectory open(Path selected) throws IOException {
         if (selected == null || selected.toString().isBlank()) {
             throw new InvalidPolicyDocumentException("Select a policy source directory with --corpus-root.");
         }
+        Path root;
         try {
-            Path root = selected.toRealPath();
-            if (root.getParent() == null) {
-                throw new InvalidPolicyDocumentException("Select a policy directory below the filesystem root.");
-            }
-            if (!attributes(root).isDirectory()) {
-                if (root.getFileName().toString().endsWith(".toml")) {
-                    throw new InvalidPolicyDocumentException("Source inspection doesn't support TOML profiles or "
-                        + "pack manifests yet. Select a plain policy directory.");
-                }
-                throw new InvalidPolicyDocumentException("Policy root " + selected + " isn't a directory." + ROOT_HINT);
-            }
-            new PlainSourceDirectory(root, reader).visit(root);
-            if (!selected.toRealPath().equals(root)) {
-                throw changed(root.getFileName().toString());
-            }
+            root = selected.toRealPath();
         } catch (NoSuchFileException ex) {
             throw new InvalidPolicyDocumentException("Policy root " + selected + " doesn't exist." + ROOT_HINT, ex);
-        } catch (IOException | DirectoryIteratorException ex) {
-            throw new InvalidPolicyDocumentException("Couldn't inspect policy root " + selected + ".", ex);
         }
+        if (root.getParent() == null) {
+            throw new InvalidPolicyDocumentException("Select a policy directory below the filesystem root.");
+        }
+        if (!attributes(root).isDirectory()) {
+            if (root.getFileName().toString().endsWith(".toml")) {
+                throw new InvalidPolicyDocumentException("Pass the directory containing pack.toml with --corpus-root=<path>. "
+                    + "Source inspection requires a directory. A profile file isn't supported here.");
+            }
+            throw new InvalidPolicyDocumentException("Policy root " + selected + " isn't a directory." + ROOT_HINT);
+        }
+        return new SourceDirectory(selected, root);
     }
 
-    private static void refuseManifest(Path root) throws IOException {
+    Path root() {
+        return root;
+    }
+
+    boolean hasManifest() throws IOException {
         try {
             attributes(root.resolve("pack.toml"));
+            return true;
         } catch (NoSuchFileException absent) {
-            return;
+            return false;
         }
-        throw new InvalidPolicyDocumentException("Source inspection doesn't support pack.toml yet. "
-            + "Select a plain policy directory.");
     }
 
-    private void visit(Path directory) throws IOException {
+    void verifySelection(boolean expectedManifest) throws IOException {
+        if (!selection.toRealPath().equals(root) || hasManifest() != expectedManifest) {
+            throw changed(root.getFileName().toString());
+        }
+    }
+
+    void readPlainFiles(SourceFile reader) throws IOException {
+        visit(root, reader);
+    }
+
+    private void visit(Path directory, SourceFile reader) throws IOException {
         BasicFileAttributes before = attributes(directory);
         if (!before.isDirectory() || !directory.toRealPath().equals(directory)) {
             throw changed(sourcePath(directory));
         }
-        if (directory.equals(root)) {
-            refuseManifest(root);
+        if (directory.equals(root) && hasManifest()) {
+            throw changed("pack.toml");
         }
         List<Path> children = new ArrayList<>();
         try (var stream = Files.newDirectoryStream(directory)) {
@@ -92,7 +101,7 @@ final class PlainSourceDirectory {
                 if (filename.endsWith(".md") && !filename.equals("TEMPLATE.md")) {
                     reader.accept(posix(root.relativize(child)), sourcePath, capture(child));
                 } else if (attributes(child).isDirectory()) {
-                    visit(child);
+                    visit(child, reader);
                 }
             } catch (IOException | DirectoryIteratorException ex) {
                 throw readFailure(sourcePath, ex);
