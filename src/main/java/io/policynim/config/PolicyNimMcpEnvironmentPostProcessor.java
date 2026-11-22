@@ -28,9 +28,14 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
             environment.getProperty("policynim.mcp.name")
         );
 
-        if (McpTransport.resolve(environment) == McpTransport.STDIO) {
+        McpTransport transport = McpTransport.resolve(environment);
+        boolean enabled = environment.getProperty("spring.ai.mcp.server.enabled", Boolean.class, true);
+        if (enabled && McpContract.resolve(environment) == McpContract.GROUNDED_V1) {
+            requireGroundedHttp(environment, transport);
+        }
+        if (transport == McpTransport.STDIO) {
             putIfMissing(environment, derived, "spring.ai.mcp.server.stdio", "true");
-            if (environment.getProperty("spring.ai.mcp.server.enabled", Boolean.class, true)) {
+            if (enabled) {
                 configureStdioLaunch(environment, derived);
             }
         }
@@ -49,6 +54,21 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
 
         if (!derived.isEmpty()) {
             environment.getPropertySources().addLast(new MapPropertySource(PROPERTY_SOURCE_NAME, derived));
+        }
+    }
+
+    private static void requireGroundedHttp(ConfigurableEnvironment environment, McpTransport transport) {
+        if (transport == McpTransport.STDIO) {
+            throw new IllegalArgumentException("policynim.mcp.contract=grounded-v1 requires HTTP. "
+                + "Use java-v1 for stdio.");
+        }
+        if (!"STREAMABLE".equalsIgnoreCase(environment.getProperty("spring.ai.mcp.server.protocol", "STREAMABLE"))) {
+            throw new IllegalArgumentException("policynim.mcp.contract=grounded-v1 requires "
+                + "spring.ai.mcp.server.protocol=STREAMABLE.");
+        }
+        if (!"servlet".equalsIgnoreCase(environment.getProperty("spring.main.web-application-type", "servlet"))) {
+            throw new IllegalArgumentException("policynim.mcp.contract=grounded-v1 requires "
+                + "spring.main.web-application-type=servlet.");
         }
     }
 

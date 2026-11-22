@@ -104,6 +104,17 @@ The check creates a temporary home for each server, verifies its negotiated revi
 
 The JDBC test uses the same Markdown file a Python operator can select with `POLICYNIM_CORPUS_DIR`. The pinned Python CLI accepted it with `policynim policies validate --source --format json` and reported one effective policy. Its source catalog digest was `sha256:8235dea85dcda12002099e86802cb31ece64c5597ae9f1ca2dc736be3d46b749`. The Java check runs jar ingest in one process and verifies the returned policy ID, path, body, and lines in another. [Shared recovery policy](../../src/test/resources/parity/policies/recovery.md)
 
+### Reproduce the paired HTTP check
+
+Use the same locked Python environment and freshly packaged jar as the stdio check. Pass the extracted Python revision so the check can import its committed public generation.
+
+```bash
+"$reference_dir/.venv/bin/python" src/test/parity/grounded_http.py \
+  --jar target/policynim.jar --reference-root "$reference_dir"
+```
+
+The check starts the installed Python command and the Java jar on loopback with temporary homes and a new test bearer token. It exercises discovery, calls before discovery, sessionless legacy requests, Host and Origin checks, protocol errors, and the next valid call. The Python reference serves its indexed generation. Java's noop store supplies its documented readiness error. The JDBC package test separately checks successful Java retrieval. Each implementation has its own expected tool list while the remaining capabilities are in development.
+
 ## Definition Of Done
 
 In `grounded-v1`, both transports negotiate the two reference protocols, execute the existing tools, report the installed Java version, reject bad envelopes at the correct boundary, and release their runtime resources. With the setting omitted or set to `java-v1`, existing clients retain their verified stateful HTTP and stdio flows. Attach the separate exact-head local and hosted reviews, merge commits, post-merge runs, and package evidence for all three review units to G01. Keep G01 open for any successful canonical call or proof that depends on later tool or storage rows. Leave G02–G04 open until their feature proofs pass.

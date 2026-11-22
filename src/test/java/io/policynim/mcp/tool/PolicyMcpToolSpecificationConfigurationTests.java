@@ -25,8 +25,8 @@ class PolicyMcpToolSpecificationConfigurationTests {
     @ParameterizedTest
     @CsvSource({"policy_search, query", "policy_preflight, task"})
     void reportsTheMissingRequiredFieldWhenArgumentsAreOmitted(String toolName, String requiredField) {
-        var specifications = new PolicyMcpToolSpecificationConfiguration()
-            .policySyncToolSpecifications(mock(PolicyMcpTools.class), new ObjectMapper());
+        var specifications = new PolicyMcpToolSpecificationConfiguration(mock(PolicyMcpTools.class), new ObjectMapper())
+            .policySyncToolSpecifications();
         var tool = specifications.stream().filter(spec -> spec.tool().name().equals(toolName)).findFirst().orElseThrow();
 
         var result = tool.callHandler().apply(null, McpSchema.CallToolRequest.builder(toolName).build());
@@ -46,7 +46,7 @@ class PolicyMcpToolSpecificationConfigurationTests {
         ));
 
         List<McpServerFeatures.SyncToolSpecification> specifications =
-            new PolicyMcpToolSpecificationConfiguration().policySyncToolSpecifications(tools, new ObjectMapper());
+            new PolicyMcpToolSpecificationConfiguration(tools, new ObjectMapper()).policySyncToolSpecifications();
 
         McpSchema.CallToolResult result = specifications.getFirst().callHandler().apply(
             null,
@@ -72,7 +72,7 @@ class PolicyMcpToolSpecificationConfigurationTests {
             .willReturn(PreflightResult.insufficientContext(preflight));
 
         List<McpServerFeatures.SyncToolSpecification> specifications =
-            new PolicyMcpToolSpecificationConfiguration().policySyncToolSpecifications(tools, mapper);
+            new PolicyMcpToolSpecificationConfiguration(tools, mapper).policySyncToolSpecifications();
 
         Map<String, McpServerFeatures.SyncToolSpecification> byName = specifications.stream()
             .collect(Collectors.toMap(specification -> specification.tool().name(), specification -> specification));
@@ -100,7 +100,7 @@ class PolicyMcpToolSpecificationConfigurationTests {
         );
 
         List<McpServerFeatures.SyncToolSpecification> specifications =
-            new PolicyMcpToolSpecificationConfiguration().policySyncToolSpecifications(tools, new ObjectMapper());
+            new PolicyMcpToolSpecificationConfiguration(tools, new ObjectMapper()).policySyncToolSpecifications();
         Map<String, McpServerFeatures.SyncToolSpecification> byName = specifications.stream()
             .collect(Collectors.toMap(specification -> specification.tool().name(), specification -> specification));
 

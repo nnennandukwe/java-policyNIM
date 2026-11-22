@@ -153,13 +153,36 @@ class PackagedAlternateProtocolsIT {
     @ParameterizedTest
     @CsvSource({"unknown,streamable-http", "unknown,stdio", "STATELESS,stdio"})
     void unsupportedProtocolFailsStartup(String protocol, String transport, @TempDir Path directory) throws Exception {
-        Process process = PackagedMcpHttp.jarCommand(directory, Map.of(), "--server.address=127.0.0.1", "--server.port=0",
-            "--policynim.mcp.transport=" + transport, "--spring.ai.mcp.server.protocol=" + protocol)
-            .redirectOutput(directory.resolve("startup.log").toFile()).start();
+        assertRejectedLaunch(directory, "spring.ai.mcp.server.protocol", "--policynim.mcp.transport=" + transport,
+            "--spring.ai.mcp.server.protocol=" + protocol);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "unknown,--server.port=0",
+        "grounded-v1,--spring.ai.mcp.server.protocol=SSE",
+        "grounded-v1,--spring.ai.mcp.server.protocol=STATELESS",
+        "grounded-v1,--spring.ai.mcp.server.stdio=true",
+        "grounded-v1,--spring.main.web-application-type=none"
+    })
+    void unavailableContractFailsBeforeServing(String contract, String option, @TempDir Path directory) throws Exception {
+        assertRejectedLaunch(directory, "policynim.mcp.contract", "--policynim.mcp.contract=" + contract, option);
+    }
+
+    @Test
+    void authenticatedGroundedServerRequiresAPublicOrigin(@TempDir Path directory) throws Exception {
+        assertRejectedLaunch(directory, "policynim.mcp.public-base-url", "--policynim.mcp.contract=grounded-v1",
+            "--policynim.mcp.auth.enabled=true", "--policynim.mcp.auth.bearer-token=" + UUID.randomUUID());
+    }
+
+    private static void assertRejectedLaunch(Path directory, String setting, String... overrides) throws Exception {
+        var launch = PackagedMcpHttp.jarCommand(directory, Map.of("SERVER_ADDRESS", "127.0.0.1", "SERVER_PORT", "0"),
+            overrides);
+        Process process = launch.redirectOutput(directory.resolve("startup.log").toFile()).start();
         try {
             assertThat(process.waitFor(10, TimeUnit.SECONDS)).isTrue();
             assertThat(process.exitValue()).isNotZero();
-            assertThat(directory.resolve("startup.log")).content().contains("spring.ai.mcp.server.protocol");
+            assertThat(directory.resolve("startup.log")).content().contains(setting).doesNotContain("Tomcat started on port");
         }
         finally {
             PackagedMcpHttp.reap(process);

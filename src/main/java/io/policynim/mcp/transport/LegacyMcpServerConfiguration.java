@@ -7,37 +7,30 @@ import io.modelcontextprotocol.server.McpSyncServer;
 import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStreamableServerTransportProvider;
+import io.policynim.config.McpContract;
 import io.policynim.config.McpTransport;
-import io.policynim.config.PolicyNimProperties;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Condition;
 import org.springframework.context.annotation.ConditionContext;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import org.springframework.core.type.AnnotatedTypeMetadata;
 
-import java.time.Duration;
 import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "spring.ai.mcp.server.enabled", havingValue = "true", matchIfMissing = true)
 class LegacyMcpServerConfiguration {
 
-    private static final String PREFIX = "spring.ai.mcp.server.";
-
-    private final Environment environment;
-    private final PolicyNimProperties properties;
+    private final McpServerSettings settings;
     private final List<McpServerFeatures.SyncToolSpecification> tools;
 
-    LegacyMcpServerConfiguration(Environment environment, PolicyNimProperties properties,
+    LegacyMcpServerConfiguration(McpServerSettings settings,
         @Qualifier("policySyncToolSpecifications") List<McpServerFeatures.SyncToolSpecification> tools) {
-        this.environment = environment;
-        this.properties = properties;
+        this.settings = settings;
         this.tools = tools;
     }
 
@@ -57,48 +50,34 @@ class LegacyMcpServerConfiguration {
 
     McpSyncServer build(McpServer.SyncSpecification<?> builder) {
         var capabilities = McpSchema.ServerCapabilities.builder();
-        if (enabled("capabilities.tool")) {
-            capabilities.tools(enabled("tool-change-notification"));
+        if (settings.enabled("capabilities.tool")) {
+            capabilities.tools(settings.enabled("tool-change-notification"));
             builder.tools(tools);
         }
-        if (enabled("capabilities.resource")) {
-            capabilities.resources(false, enabled("resource-change-notification"));
+        if (settings.enabled("capabilities.resource")) {
+            capabilities.resources(false, settings.enabled("resource-change-notification"));
         }
-        if (enabled("capabilities.prompt")) {
-            capabilities.prompts(enabled("prompt-change-notification"));
+        if (settings.enabled("capabilities.prompt")) {
+            capabilities.prompts(settings.enabled("prompt-change-notification"));
         }
-        if (enabled("capabilities.completion")) {
+        if (settings.enabled("capabilities.completion")) {
             capabilities.completions();
         }
-        return builder.serverInfo(serverInfo())
-            .instructions(environment.getProperty(PREFIX + "instructions"))
-            .requestTimeout(requestTimeout())
+        return builder.serverInfo(settings.serverInfo())
+            .instructions(settings.instructions())
+            .requestTimeout(settings.requestTimeout())
             .capabilities(capabilities.build())
             // Existing Java clients receive tool-owned validation errors and can omit optional values via null.
             .validateToolInputs(false)
             .build();
     }
 
-    McpSchema.Implementation serverInfo() {
-        String artifactVersion = LegacyMcpServerConfiguration.class.getPackage().getImplementationVersion();
-        String version = environment.getProperty(PREFIX + "version",
-            artifactVersion == null ? "development" : artifactVersion);
-        return new McpSchema.Implementation(environment.getProperty(PREFIX + "name", properties.getMcp().getName()), version);
-    }
-
-    Duration requestTimeout() {
-        return Binder.get(environment).bind(PREFIX + "request-timeout", Duration.class).orElse(Duration.ofSeconds(20));
-    }
-
-    boolean enabled(String property) {
-        return environment.getProperty(PREFIX + property, Boolean.class, true);
-    }
-
     static final class StatefulHttpCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
             var environment = context.getEnvironment();
-            return McpTransport.resolve(environment) == McpTransport.STREAMABLE_HTTP
+            return McpContract.resolve(environment) == McpContract.JAVA_V1
+                && McpTransport.resolve(environment) == McpTransport.STREAMABLE_HTTP
                 && LegacyHttpProtocol.resolve(environment) == LegacyHttpProtocol.STREAMABLE;
         }
     }
