@@ -1,6 +1,8 @@
 package io.policynim.policy.catalog;
 
 import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.CharacterCodingException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileSystemException;
 import java.nio.file.Files;
@@ -94,9 +96,13 @@ class PackDirectoryTests {
     @EnabledOnOs(OS.LINUX)
     void rejectsDirectoryNamesWhoseNativeBytesArentUtf8() throws Exception {
         Path selected = root.toRealPath();
-        Path invalid = Path.of(selected.toUri().resolve("bad%FF.md"));
-        try (var directory = PackDirectory.open(selected)) {
-            assertThrows(IOException.class, () -> directory.relativeName(invalid));
+        // URI.resolve would produce file:/ and the Unix JDK would replace FF with UTF-8 for U+FFFD.
+        URI raw = URI.create(selected.toUri().toASCIIString() + "bad%FF.md");
+        Files.createFile(Path.of(raw));
+        try (var entries = Files.list(selected); var directory = PackDirectory.open(selected)) {
+            Path invalid = entries.findFirst().orElseThrow();
+            assertEquals(raw.getRawPath(), invalid.toUri().getRawPath());
+            assertThrows(CharacterCodingException.class, () -> directory.relativeName(invalid));
         }
     }
 
