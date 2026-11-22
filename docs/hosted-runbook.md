@@ -115,6 +115,16 @@ export POLICYNIM_PROVIDER_NVIDIA_API_KEY=replace-with-runtime-secret
 
 ## Inspect a local policy directory
 
+To inspect the installed pack from any working directory, run the jar’s source commands. Each command reads the shipped files directly from the jar.
+
+```bash
+java -jar /app/policynim.jar policies list --source
+java -jar /app/policynim.jar policies validate --source --format json
+java -jar /app/policynim.jar policies show SEC-AUTH-001 --source --format json
+```
+
+The shipped pack contains 26 policies. To inspect your own directory, set `POLICYNIM_CORPUS_DIR` in the process environment or in a file named by `POLICYNIM_CONFIG_FILE`. The process setting takes precedence over the file. A relative path starts at your working directory. You can override the environment for one command with `--corpus-root`. Set `POLICYNIM_CORPUS_DIR` to an empty string to use the shipped pack even when the settings file names another corpus. If the jar reports a malformed source setting, correct the named setting or pass the directory with `--corpus-root`. If a bundled file can't be read, reinstall the jar or select a local directory. Source inspection requires `--source` until the jar supports active-generation selection. Profile selection and automatic settings-file discovery have their own parity work. [Source selection Build Plan](build-plans/bundled-source-catalog.md)
+
 Use the packaged jar to inspect editable policy Markdown before configuring storage or a model provider. Put `policies` immediately after the jar path. Select a directory containing policy Markdown. When a root `pack.toml` is present, the command reads the declared policy members. In a plain directory it reads nested Markdown and skips `TEMPLATE.md`. For a path relative to the current directory, use the same working directory for all three commands.
 
 ```bash

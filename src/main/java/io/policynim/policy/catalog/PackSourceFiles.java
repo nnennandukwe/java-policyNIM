@@ -110,7 +110,7 @@ final class PackSourceFiles {
         return new InvalidPolicyDocumentException(message, error);
     }
 
-    private static String normalizedPath(String raw, String field) {
+    static String normalizedPath(String raw, String field) {
         List<String> components = Arrays.stream(raw.split("/"))
             .filter(part -> !part.isEmpty() && !part.equals(".")).toList();
         String name = components.isEmpty() ? "" : components.getLast();
