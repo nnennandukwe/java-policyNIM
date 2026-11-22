@@ -126,14 +126,18 @@ public final class SourceCatalogCommand {
         }
     }
 
-    static String pathForDisplay(String path) {
+    private static String pathForDisplay(String path) {
+        return pathForDisplay(path, true);
+    }
+
+    static String pathForDisplay(String path, boolean escapeBackslashes) {
         var display = new StringBuilder(path.length());
         path.codePoints().forEach(point -> {
             switch (Character.getType(point)) {
                 case Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR ->
                     display.append((point <= Character.MAX_VALUE ? "\\u%04x" : "\\U%08x").formatted(point));
                 default -> {
-                    if (point == '\\') {
+                    if (escapeBackslashes && point == '\\') {
                         display.append('\\');
                     }
                     display.appendCodePoint(point);

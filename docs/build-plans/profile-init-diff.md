@@ -97,4 +97,6 @@ Java creates a file either installed product can read, preserves existing target
 
 ## Assumptions And Defaults
 
+On POSIX, a directory name can begin or end with a space. The pinned wheel can create a profile whose reader trims that space and fails to find the pack. The jar adds a leading `./` or trailing `/.` to the selector when the path would otherwise lose that whitespace. Both readers can then open the named directory and compare the same profile. A local directory whose recorded name would select a different builtin pack is refused before publication. [Pinned profile path model](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/services/profiles.py#L47-L85) · [Initializer cases](../../src/test/java/io/policynim/policy/catalog/ProfileInitializerTests.java)
+
 The Java default will write `builtin:baseline`, which both readers support. The Python wheel writes a filesystem selector relative to its own installed resources. Each authored file therefore has its own profile and review identity. Compare each file unchanged through both readers. The Java workflow requires no extracted runtime corpus, new configuration key or checkout path. [Builtin selection](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/services/profiles.py#L223-L239)

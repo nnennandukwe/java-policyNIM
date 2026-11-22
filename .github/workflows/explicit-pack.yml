@@ -48,8 +48,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Verify pack file access on the host
-        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests" test
+      - name: Verify native pack access and profile publication
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests" test
       - name: Package the installed jar
         run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
       - name: Verify source inspection and bundled assets in the installed jar

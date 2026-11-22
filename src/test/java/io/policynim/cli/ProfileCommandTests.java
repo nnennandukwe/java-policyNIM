@@ -78,6 +78,13 @@ class ProfileCommandTests {
     }
 
     @Test
+    void initTextShowsTheDestinationWithNativeSeparators(@TempDir Path dir) {
+        Path profile = dir.resolve("profiles").resolve("team.toml");
+        assertThat(run("profile", "init", profile.toString())).isZero();
+        assertThat(out.toString(UTF_8).lines().findFirst()).contains("Created pinned profile: " + profile);
+    }
+
+    @Test
     void rejectsInitOnlyFlagsOnDiffAndKeepsDomainErrorsOnJsonStdout(@TempDir Path dir) throws Exception {
         Path path = dir.resolve("existing.toml");
         byte[] original = "operator notes".getBytes(UTF_8);

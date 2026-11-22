@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import io.policynim.policy.catalog.SourceCatalog;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
 
+import java.io.File;
 import java.io.PrintStream;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -70,7 +71,7 @@ public final class ProfileCommand {
             result.set("profile", profile);
             output.println(result.toPrettyString());
         } else {
-            output.println("Created pinned profile: " + SourceCatalogCommand.pathForDisplay(displayed));
+            output.println("Created pinned profile: " + SourceCatalogCommand.pathForDisplay(displayed, File.separatorChar != '\\'));
             output.println("To inspect it, run profile preview with the same jar and path.");
         }
     }
