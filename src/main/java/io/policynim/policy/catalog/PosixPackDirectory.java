@@ -31,7 +31,7 @@ final class PosixPackDirectory extends PackDirectory {
         int openat(int parent, @In byte[] component, int flags);
     }
 
-    private static final POSIX POSIX_API = POSIXFactory.getNativePOSIX();
+    static final POSIX POSIX_API = POSIXFactory.getNativePOSIX();
     private static final DirectoryCalls CALLS = LibraryLoader.create(DirectoryCalls.class)
         .load(Platform.getNativePlatform().getStandardCLibraryName());
     private static final int DIRECTORY = flags(OpenFlags.O_DIRECTORY);
@@ -52,6 +52,10 @@ final class PosixPackDirectory extends PackDirectory {
             checked(POSIX_API.close(rootFd));
             throw failure;
         }
+    }
+
+    int descriptor() {
+        return rootFd;
     }
 
     @Override

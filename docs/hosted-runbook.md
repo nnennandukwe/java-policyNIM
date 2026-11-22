@@ -164,7 +164,7 @@ java -jar /app/policynim.jar profile preview /work/team.toml
 java -jar /app/policynim.jar profile diff /work/team.toml --format json
 ```
 
-Init creates the profile at a new path. If the destination already exists, inspect it or choose another path. If your filesystem refuses hard links, select a writable profile directory on a filesystem that supports them and retry.
+Init creates the profile at a new path. If the destination already exists, inspect it or choose another path. On Linux and macOS the destination filesystem must support hard links. On Windows the writer needs permission to rename the staged file. If init reports that the profile was created before cleanup failed or its directory moved, inspect that directory for the completed profile before retrying.
 
 Diff reads the profile and its current sources. It lists added, changed and removed policy revisions, packs with changed pins and decisions that need another review. `current_policies` contains the current authored text and target digests before decisions are applied. If `validation_error` contains a message, use it to repair the profile or sources and rerun diff. A changed pack ID or an unreadable profile prevents a comparison and returns exit 1.
 

@@ -25,10 +25,12 @@ final class WindowsPackDirectory extends PackDirectory {
         int GetFileInformationByHandleEx(Pointer handle, int infoClass, @Out byte[] information, int size);
         int GetFinalPathNameByHandleW(Pointer handle, @Out byte[] path, int characters, int flags);
         int ReadFile(Pointer handle, @Out byte[] bytes, int length, @Out IntByReference count, Pointer overlapped);
+        int WriteFile(Pointer handle, Pointer bytes, int length, @Out IntByReference count, Pointer overlapped);
+        int FlushFileBuffers(Pointer handle);
         int CloseHandle(Pointer handle);
     }
 
-    private static final Kernel32 API = LibraryLoader.create(Kernel32.class).stdcall().load("kernel32");
+    static final Kernel32 API = LibraryLoader.create(Kernel32.class).stdcall().load("kernel32");
     private static final int GENERIC_READ = 0x80000000;
     private static final int FILE_READ_ATTRIBUTES = 0x80;
     private static final int SHARE_READ_WRITE_DELETE = 7;
@@ -39,11 +41,16 @@ final class WindowsPackDirectory extends PackDirectory {
     private static final int FILE_TYPE_DISK = 1;
     private static final int FILE_ATTRIBUTE_DIRECTORY = 0x10;
     private static final int FILE_ATTRIBUTE_REPARSE_POINT = 0x400;
-    private final Pointer rootHandle;
+    final Pointer rootHandle;
 
     WindowsPackDirectory(Path root) throws IOException {
+        this(root, 0);
+    }
+
+    WindowsPackDirectory(Path root, int additionalAccess) throws IOException {
         super(root);
-        Pointer opened = openHandle(root, FILE_READ_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+        Pointer opened = openHandle(root, FILE_READ_ATTRIBUTES | additionalAccess,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
         try {
             int attributes = attributes(opened);
             if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
@@ -89,18 +96,22 @@ final class WindowsPackDirectory extends PackDirectory {
     private record FileId(long volume, long first, long second) { }
 
     static Object publicationFileId(Path path) throws IOException {
-        final int fileIdInfo = 18;
         Pointer handle = openHandle(path, FILE_READ_ATTRIBUTES, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
         try {
-            byte[] data = new byte[24];
-            if (API.GetFileInformationByHandleEx(handle, fileIdInfo, data, data.length) == 0) {
-                throw new IOException("Couldn't establish file identity for profile publication.");
-            }
-            var id = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
-            return new FileId(id.getLong(), id.getLong(), id.getLong());
+            return fileId(handle);
         } finally {
             closeHandle(handle);
         }
+    }
+
+    static Object fileId(Pointer handle) throws IOException {
+        final int fileIdInfo = 18;
+        byte[] data = new byte[24];
+        if (API.GetFileInformationByHandleEx(handle, fileIdInfo, data, data.length) == 0) {
+            throw new IOException("Couldn't establish file identity for profile publication.");
+        }
+        var id = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN);
+        return new FileId(id.getLong(), id.getLong(), id.getLong());
     }
 
     private static int attributes(Pointer handle) throws IOException {
@@ -147,7 +158,7 @@ final class WindowsPackDirectory extends PackDirectory {
         }
     }
 
-    private static void closeHandle(Pointer handle) throws IOException {
+    static void closeHandle(Pointer handle) throws IOException {
         if (API.CloseHandle(handle) == 0) {
             throw new IOException("Couldn't close the selected pack file.");
         }
