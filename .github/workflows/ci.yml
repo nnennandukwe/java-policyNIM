@@ -97,5 +97,5 @@ jobs:
           POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package
           sha256sum target/policynim.jar
           jar tf target/policynim.jar | grep -F BOOT-INF/classes/application.yml
-      - name: Verify packaged MCP sessions
-        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT,GroundedHttpIT,GroundedStdioIT failsafe:integration-test failsafe:verify
+      - name: Verify packaged MCP sessions and source catalog commands
+        run: POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -Dit.test=PackagedStdioIT,PackagedHttpIT,PackagedAlternateProtocolsIT,GroundedHttpIT,GroundedStdioIT,PackagedSourceCatalogIT failsafe:integration-test failsafe:verify

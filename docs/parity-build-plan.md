@@ -45,6 +45,8 @@ The stage owners below account for all mandatory rows. A row can rely on evidenc
 
 The optional native MCP Tasks extension stays outside the release baseline. Package publication, production deployment, paid workloads and real credential changes need separate authority. Track a required live claim as pending until its owner supplies that authority and the check runs. [Python release acceptance](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/docs/evidence/stable-baseline-acceptance.md)
 
+The first sources unit will expose read-only inspection of an operator-selected Markdown directory. [Source catalog inspection Build Plan](build-plans/source-catalog.md)
+
 ## Package Layout / File-to-Task Mapping
 
 Paths below `src/main/java/io/policynim/` name Java packages. Existing package boundaries and ArchUnit rules apply.
