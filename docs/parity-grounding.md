@@ -93,3 +93,5 @@ With the HTTP protocol explicitly set to `SSE`, the Java starting jar also serve
 A clean Java archive built with `POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw -B --no-transfer-progress -DskipTests package`. Python MCP SDK 2.2.0 connected to that jar over loopback HTTP with Java's default noop storage. Both auto and forced legacy negotiated `2025-06-18` and listed only `policy_search` and `policy_preflight`. Both tools omitted output schemas and annotations. This establishes discovery at the Java starting revision. The G01–G04 proof still requires working canonical calls.
 
 On the same jar, the supported `--policynim.mcp.transport=stdio` setting accepted a newline-delimited legacy `initialize` request for `2025-11-25` and replied with `2024-11-05`. Its stdout emitted 27 nonempty non-JSON lines and six blank lines before that reply in this run. A strict line-oriented client needs a clean protocol stream.
+
+Plain-directory source inspection supplies partial G08 and G09 evidence for original byte revisions, normalized bodies and unmanifested catalogs. [Merged package evidence](parity-operations.md#plain-source-catalogs)
