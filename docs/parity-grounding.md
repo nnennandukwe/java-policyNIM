@@ -96,4 +96,4 @@ On the same jar, the supported `--policynim.mcp.transport=stdio` setting accepte
 
 Plain-directory source inspection supplies partial G08 and G09 evidence for original byte revisions, normalized bodies and unmanifested catalogs. [Merged package evidence](parity-operations.md#plain-source-catalogs)
 
-G09 also has partial evidence for pack-selected source bytes and provenance. Operators can inspect explicit packs through the installed Java CLI. The next check covers the same catalog from bundled resources. [Merged explicit packs](parity-operations.md#explicit-policy-packs) · [Bundled source Build Plan](build-plans/bundled-source-catalog.md)
+G09 also has partial evidence for pack-selected source bytes and provenance. Operators can inspect explicit packs through the installed Java CLI. The installed jar and Linux image also serve this catalog directly from bundled resources. [Merged explicit packs](parity-operations.md#explicit-policy-packs) · [Bundled source results](parity-operations.md#installed-policy-sources) · [Read-only profile Build Plan](build-plans/read-only-policy-profiles.md)

@@ -45,7 +45,7 @@ The stage owners below account for all mandatory rows. A row can rely on evidenc
 
 The optional native MCP Tasks extension stays outside the release baseline. Package publication, production deployment, paid workloads and real credential changes need separate authority. Track a required live claim as pending until its owner supplies that authority and the check runs. [Python release acceptance](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/docs/evidence/stable-baseline-acceptance.md)
 
-Java can inspect plain directories and explicit pack manifests. The next unit lets operators inspect the shipped policies from an installed jar or container. [Plain directories](build-plans/source-catalog.md) · [Explicit packs](build-plans/explicit-policy-pack.md) · [Bundled source Build Plan](build-plans/bundled-source-catalog.md)
+Java can inspect plain directories, explicit pack manifests and the shipped corpus. The next unit reads a profile’s pack pins and explains which policies it selects, excludes or replaces. [Source receipts](parity-operations.md#installed-policy-sources) · [Read-only profile Build Plan](build-plans/read-only-policy-profiles.md)
 
 ## Package Layout / File-to-Task Mapping
 
