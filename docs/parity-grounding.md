@@ -95,3 +95,5 @@ A clean Java archive built with `POLICYNIM_PROVIDER_NVIDIA_ENABLED=false ./mvnw 
 On the same jar, the supported `--policynim.mcp.transport=stdio` setting accepted a newline-delimited legacy `initialize` request for `2025-11-25` and replied with `2024-11-05`. Its stdout emitted 27 nonempty non-JSON lines and six blank lines before that reply in this run. A strict line-oriented client needs a clean protocol stream.
 
 Plain-directory source inspection supplies partial G08 and G09 evidence for original byte revisions, normalized bodies and unmanifested catalogs. [Merged package evidence](parity-operations.md#plain-source-catalogs)
+
+G09 also has partial evidence for pack-selected source bytes and provenance. Operators can inspect explicit packs through the installed Java CLI. The next check covers the same catalog from bundled resources. [Merged explicit packs](parity-operations.md#explicit-policy-packs) · [Bundled source Build Plan](build-plans/bundled-source-catalog.md)
