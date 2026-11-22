@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import select
 import shutil
 import socket
 import subprocess
@@ -265,6 +266,7 @@ def main():
     with tempfile.TemporaryDirectory() as workspace, socket.socket() as occupied:
         occupied.bind(("127.0.0.1", 0))
         occupied.listen()
+        port = occupied.getsockname()[1]
         for product in ("python", "java"):
             base = Path(workspace) / product
             home = base / "home"
@@ -282,9 +284,11 @@ def main():
                 env["POLICYNIM_CORPUS_DIR"] = str(root)
                 program = [cli]
             else:
-                env.update(SERVER_ADDRESS="127.0.0.1", SERVER_PORT=str(occupied.getsockname()[1]))
+                env.update(SERVER_ADDRESS="127.0.0.1", SERVER_PORT=str(port), POLICYNIM_STORAGE_MODE="jdbc",
+                           SPRING_DATASOURCE_URL=f"jdbc:postgresql://127.0.0.1:{port}/source_test?connectTimeout=1")
                 program = [args.java, f"-Duser.home={home}", "-jar", str(jar)]
             result[product] = exercise(CatalogCommand(product, program, cwd, root, env), fixture)
+        require(not select.select([occupied], [], [], 0)[0], "Source inspection opened a database connection.")
     with jar.open("rb") as artifact:
         require(hashlib.file_digest(artifact, "sha256").hexdigest() == digest, "The jar changed during the comparison.")
     print(json.dumps(result, indent=2))
