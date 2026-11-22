@@ -15,6 +15,7 @@ Project docs:
 - [Contributor workflow](docs/contributor-workflow.md)
 - [Architecture](docs/architecture.md)
 - [Hosted runbook](docs/hosted-runbook.md)
+- [Java and Python parity matrix](docs/parity-matrix.md) and [Software Build Plan](docs/parity-build-plan.md)
 
 ## Local Verification
 
