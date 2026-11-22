@@ -59,6 +59,7 @@ async def probe(label, program, arguments, root, version, tool_names):
         "XDG_CONFIG_HOME": str(home),
         "XDG_DATA_HOME": str(home),
         "POLICYNIM_CONFIG_FILE": str(config),
+        "POLICYNIM_EVAL_WORKSPACE_DIR": str(home / "evaluations"),
         "POLICYNIM_MCP_TRANSPORT": "stdio",
         "POLICYNIM_PROVIDER_NVIDIA_ENABLED": "false",
         "POLICYNIM_STORAGE_MODE": "noop",

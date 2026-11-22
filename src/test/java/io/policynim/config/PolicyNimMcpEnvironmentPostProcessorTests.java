@@ -159,12 +159,14 @@ class PolicyNimMcpEnvironmentPostProcessorTests {
     }
 
     @Test
-    void rejectsGroundedStdioUntilItsDispatcherShips() {
+    void selectsGroundedStdioWhenTheSpringSwitchOverridesHttp() {
         var environment = new MockEnvironment()
             .withProperty("policynim.mcp.contract", "grounded-v1")
             .withProperty("spring.ai.mcp.server.stdio", "true");
-        assertThatThrownBy(() -> postProcess(environment)).hasMessageContaining("grounded-v1")
-            .hasMessageContaining("stdio");
+        postProcess(environment);
+        assertThat(environment.getProperty("spring.ai.mcp.server.stdio")).isEqualTo("true");
+        assertThat(environment.getProperty("spring.main.web-application-type")).isEqualTo("none");
+        assertThat(environment.getProperty("logging.config")).isEqualTo("classpath:logback-stdio.xml");
     }
 
     @Test

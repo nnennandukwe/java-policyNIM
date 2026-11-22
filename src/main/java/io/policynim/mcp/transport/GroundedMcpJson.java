@@ -7,8 +7,8 @@ import io.modelcontextprotocol.json.jackson2.JacksonMcpJsonMapper;
 import io.modelcontextprotocol.modern.JsonRpc;
 import io.modelcontextprotocol.spec.McpSchema;
 
-final class GroundedHttpJson {
-    private GroundedHttpJson() { }
+final class GroundedMcpJson {
+    private GroundedMcpJson() { }
 
     static JacksonMcpJsonMapper mapper() {
         var json = LegacyTransportJson.objectMapper();

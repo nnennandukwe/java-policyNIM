@@ -1,10 +1,8 @@
 package io.policynim.mcp.transport;
 
-import io.modelcontextprotocol.json.McpJsonDefaults;
 import io.modelcontextprotocol.server.McpServer;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.server.McpSyncServer;
-import io.modelcontextprotocol.server.transport.StdioServerTransportProvider;
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpStreamableServerTransportProvider;
 import io.policynim.config.McpContract;
@@ -32,13 +30,6 @@ class LegacyMcpServerConfiguration {
         @Qualifier("policySyncToolSpecifications") List<McpServerFeatures.SyncToolSpecification> tools) {
         this.settings = settings;
         this.tools = tools;
-    }
-
-    @Bean(destroyMethod = "closeGracefully")
-    @Conditional(StdioCondition.class)
-    McpSyncServer stdioMcpServer() {
-        var transport = new StdioServerTransportProvider(McpJsonDefaults.getMapper());
-        return build(McpServer.sync(transport));
     }
 
     @Bean(destroyMethod = "closeGracefully")
@@ -79,21 +70,6 @@ class LegacyMcpServerConfiguration {
             return McpContract.resolve(environment) == McpContract.JAVA_V1
                 && McpTransport.resolve(environment) == McpTransport.STREAMABLE_HTTP
                 && LegacyHttpProtocol.resolve(environment) == LegacyHttpProtocol.STREAMABLE;
-        }
-    }
-
-    static final class StdioCondition implements Condition {
-        @Override
-        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            var environment = context.getEnvironment();
-            if (McpTransport.resolve(environment) != McpTransport.STDIO) {
-                return false;
-            }
-            if (LegacyHttpProtocol.resolve(environment) == LegacyHttpProtocol.STATELESS) {
-                throw new IllegalArgumentException(LegacyHttpProtocol.PROPERTY + "=STATELESS requires HTTP. "
-                    + "Use STREAMABLE or SSE with stdio.");
-            }
-            return true;
         }
     }
 }

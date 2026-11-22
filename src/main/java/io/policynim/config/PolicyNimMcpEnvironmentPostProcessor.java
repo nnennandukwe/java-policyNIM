@@ -30,8 +30,9 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
 
         McpTransport transport = McpTransport.resolve(environment);
         boolean enabled = environment.getProperty("spring.ai.mcp.server.enabled", Boolean.class, true);
-        if (enabled && McpContract.resolve(environment) == McpContract.GROUNDED_V1) {
-            requireGroundedHttp(environment, transport);
+        if (enabled && McpContract.resolve(environment) == McpContract.GROUNDED_V1
+            && transport == McpTransport.STREAMABLE_HTTP) {
+            requireGroundedHttp(environment);
         }
         if (transport == McpTransport.STDIO) {
             putIfMissing(environment, derived, "spring.ai.mcp.server.stdio", "true");
@@ -57,11 +58,7 @@ public class PolicyNimMcpEnvironmentPostProcessor implements EnvironmentPostProc
         }
     }
 
-    private static void requireGroundedHttp(ConfigurableEnvironment environment, McpTransport transport) {
-        if (transport == McpTransport.STDIO) {
-            throw new IllegalArgumentException("policynim.mcp.contract=grounded-v1 requires HTTP. "
-                + "Use java-v1 for stdio.");
-        }
+    private static void requireGroundedHttp(ConfigurableEnvironment environment) {
         if (!"STREAMABLE".equalsIgnoreCase(environment.getProperty("spring.ai.mcp.server.protocol", "STREAMABLE"))) {
             throw new IllegalArgumentException("policynim.mcp.contract=grounded-v1 requires "
                 + "spring.ai.mcp.server.protocol=STREAMABLE.");

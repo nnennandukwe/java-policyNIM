@@ -1,6 +1,7 @@
 package io.policynim;
 
 import io.policynim.ingest.IngestCommandLine;
+import io.policynim.mcp.transport.GroundedStdioRuntime;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,6 +11,8 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerA
 import org.springframework.boot.autoconfigure.jdbc.JdbcTemplateAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Map;
 
 @SpringBootApplication(exclude = {
@@ -22,7 +25,22 @@ import java.util.Map;
 public class PolicyNimApplication {
 
     public static void main(String[] args) {
-        application(args).run(args);
+        var context = application(args).run(args);
+        var stdio = context.getBeanProvider(GroundedStdioRuntime.class).getIfAvailable();
+        if (stdio == null) {
+            return;
+        }
+        // The main thread owns stdin after Spring has initialized the tools and their dependencies.
+        try (context) {
+            stdio.run();
+        }
+        catch (IOException failure) {
+            throw new UncheckedIOException("Grounded MCP stdio failed", failure);
+        }
+        catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Grounded MCP stdio was interrupted", interrupted);
+        }
     }
 
     static SpringApplication application(String[] args) {

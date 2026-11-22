@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -41,7 +42,7 @@ class PackagedJdbcSearchIT {
         "io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}""";
 
     @Test
-    void separateJarReadsIngestedPolicyOverAuthenticatedHttp(@TempDir Path directory) throws Exception {
+    void separateJarsReadIngestedPolicyOverAuthenticatedHttpAndStdio(@TempDir Path directory) throws Exception {
         Path corpus = Files.createDirectory(directory.resolve("policies"));
         try (var fixture = new ClassPathResource("parity/policies/recovery.md").getInputStream()) {
             Files.copy(fixture, corpus.resolve("recovery.md"));
@@ -81,7 +82,25 @@ class PackagedJdbcSearchIT {
                 PackagedMcpHttp.reap(server);
             }
             verifyGroundedReaders(readerDirectory, database, token);
+            verifyGroundedStdioReaders(readerDirectory, database);
         }
+    }
+
+    private static void verifyGroundedStdioReaders(Path directory, Map<String, String> database) throws Exception {
+        var json = new ObjectMapper();
+        var modern = PackagedMcpStdio.exchange(directory, database, List.of(json.readTree(MODERN_SEARCH).toString()));
+        assertEquals(1, modern.size());
+        var result = modern.get(3).required("result");
+        assertEquals("complete", result.required("resultType").asText());
+        assertStoredPolicy(result);
+
+        var legacy = PackagedMcpStdio.exchange(directory, database, List.of(
+            json.readTree(GROUNDED_INITIALIZE).toString(), INITIALIZED, SEARCH));
+        assertEquals(2, legacy.size());
+        assertEquals("2025-11-25", legacy.get(1).required("result").required("protocolVersion").asText());
+        var search = legacy.get(2).required("result");
+        assertFalse(search.has("resultType"));
+        assertStoredPolicy(search);
     }
 
     private static void verifyGroundedReaders(Path directory, Map<String, String> database, String token) throws Exception {
