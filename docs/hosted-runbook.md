@@ -123,7 +123,9 @@ java -jar /app/policynim.jar policies list --source --corpus-root=/work/policies
 java -jar /app/policynim.jar policies show OPS-RECOVERY-001 --source --corpus-root=/work/policies --format json
 ```
 
-Copy the ID from `list` exactly, including uppercase and lowercase letters. The content revision hashes the original bytes, including line endings. The target digest also covers the normalized policy metadata, body and relative path. The catalog digest covers every selected entry in policy-ID order. A source inspection reports `scope=source`, `generation_id=null` and an unknown indexed count.
+Copy the ID from `list` exactly, including uppercase and lowercase letters. On Linux, use a UTF-8 locale when a policy ID or path contains non-ASCII characters. For example, prefix the command with `LC_ALL=C.UTF-8` on Ubuntu. The jar writes policy text and JSON in UTF-8.
+
+The content revision hashes the original bytes, including line endings. The target digest also covers the normalized policy metadata, body and relative path. The catalog digest covers every selected entry in policy-ID order. A source inspection reports `scope=source`, `generation_id=null` and an unknown indexed count.
 
 If a file can't be read or two entries declare the same ID, fix the reported source and rerun `validate`. JSON mode returns one error object on stdout and exit 1 for an invalid source. Command usage errors go to stderr with exit 2. A file alias must resolve within the selected root. Inspect an operator-controlled directory while its contents are stable. The command reports a detected change during capture.
 

@@ -274,16 +274,15 @@ def main():
             cwd.mkdir()
             config = home / "empty.env"
             config.touch()
-            env = {"HOME": str(home), "PATH": os.defpath, "XDG_CONFIG_HOME": str(home / "config"),
+            env = {"HOME": str(home), "PATH": os.defpath, "LC_ALL": "C.UTF-8", "XDG_CONFIG_HOME": str(home / "config"),
                    "XDG_DATA_HOME": str(home / "data"), "POLICYNIM_CONFIG_FILE": str(config),
                    "POLICYNIM_EVAL_WORKSPACE_DIR": str(home / "evaluations"), "NO_COLOR": "1",
-                   "PYTHONDONTWRITEBYTECODE": "1"}
+                   "PYTHONDONTWRITEBYTECODE": "1", "POLICYNIM_PROVIDER_NVIDIA_ENABLED": "false"}
             if product == "python":
                 env["POLICYNIM_CORPUS_DIR"] = str(root)
                 program = [cli]
             else:
-                env.update(SERVER_ADDRESS="127.0.0.1", SERVER_PORT=str(occupied.getsockname()[1]),
-                           POLICYNIM_PROVIDER_NVIDIA_ENABLED="false")
+                env.update(SERVER_ADDRESS="127.0.0.1", SERVER_PORT=str(occupied.getsockname()[1]))
                 program = [args.java, f"-Duser.home={home}", "-jar", str(jar)]
             result[product] = exercise(CatalogCommand(product, program, cwd, root, env), fixture)
     with jar.open("rb") as artifact:

@@ -75,6 +75,8 @@ Compute the three identities from the same captured bytes. Use SHA-256, lowercas
 
 The pinned source format recognizes an inline list only when both brackets are present. It recognizes a quoted scalar only when its quotes match. In a quoted string, escaped quote marks lose their backslash. Other backslashes remain part of the authored text. For a runtime matcher, an unquoted decimal such as `1000` fails validation. The tokens `0x10` and `1_000` remain strings in this grammar. These choices affect the public source metadata and its hashes. [Source scalar rules](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/ingest/parser.py#L730-L823)
 
+Quote an inline tag that contains an apostrophe, as in `tags: ["can't"]`. A rule’s `reason` accepts the text `123`, `true` or `null` with or without quotes. A duplicate rule key with a multiline value reports the last line of that value. Look above that line for the repeated key. Both installed commands agreed on these cases. [Rule field validation](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/ingest/parser.py#L424-L558) · [Inline list parsing](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/ingest/parser.py#L826-L875)
+
 The text listing shows each policy's ID, state, domain, pack description and title. Use `show` for its source path, body and revision, or request JSON for the complete records. [Python catalog output](https://github.com/nnennandukwe/policyNIM/blob/fcc5322a6672b0275dcc6e0c299e631df8e8de19/src/policynim/interfaces/cli.py#L161-L245)
 
 ## Failure And Recovery Rules

@@ -81,11 +81,11 @@ class PackagedSourceCatalogIT {
             String id = "GUIDELINES-API-TASKS";
             var locale = Map.of("LC_ALL", "C");
             var plain = cli.run(locale, "policies", "show", id, "--source", selector);
-            assertEquals(0, plain.exit());
-            assertTrue(plain.stderr().isEmpty());
-            assertTrue(plain.stdout().contains(body));
+            assertEquals(0, plain.exit(), plain::diagnostics);
+            assertTrue(plain.stderr().isEmpty(), plain::diagnostics);
+            assertTrue(plain.stdout().contains(body), plain::diagnostics);
             var response = cli.run(locale, "policies", "show", id, "--source", selector, "--format", "json");
-            assertTrue(response.stdout().contains(title));
+            assertTrue(response.stdout().contains(title), response::diagnostics);
             var shown = response.json(0);
             assertEquals(id, shown.required("policy").required("policy_id").textValue());
             assertEquals("general", shown.required("policy").required("domain").textValue());
@@ -125,13 +125,13 @@ class PackagedSourceCatalogIT {
         try (var occupied = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
             var cli = new CatalogJar(directory, occupied.getLocalPort());
             var help = cli.run("policies", "show", "--help");
-            assertEquals(0, help.exit());
+            assertEquals(0, help.exit(), help::diagnostics);
             assertTrue(help.stdout().contains("--source") && help.stdout().contains("--corpus-root")
-                && help.stdout().contains("--format"));
+                && help.stdout().contains("--format"), help::diagnostics);
             String selector = "--corpus-root=" + directory.resolve("policies");
             var misplaced = cli.run("--spring.main.banner-mode=off", "policies", "validate", "--source", selector,
                 "--format", "json");
-            assertEquals(2, misplaced.exit());
+            assertEquals(2, misplaced.exit(), misplaced::diagnostics);
             misplaced.assertUsageError();
             cli.run("policies", "validate", selector).assertUsageError();
             cli.run("policies", "list", "--source").assertUsageError();
@@ -155,7 +155,7 @@ class PackagedSourceCatalogIT {
     private record CatalogJar(Path directory, int port) {
 
         Reply run(String... arguments) throws Exception {
-            return run(Map.of(), arguments);
+            return run(Map.of("LC_ALL", "C.UTF-8"), arguments);
         }
 
         Reply run(Map<String, String> overrides, String... arguments) throws Exception {
@@ -175,7 +175,8 @@ class PackagedSourceCatalogIT {
                 .redirectErrorStream(false).redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
             try {
                 assertTrue(child.waitFor(15, TimeUnit.SECONDS), "The catalog command didn't exit within 15 seconds.");
-                return new Reply(child.exitValue(), Files.readString(stdout), Files.readString(stderr));
+                String invocation = "LC_ALL=" + launch.environment().get("LC_ALL") + " " + String.join(" ", arguments);
+                return new Reply(invocation, child.exitValue(), Files.readString(stdout), Files.readString(stderr));
             }
             finally {
                 PackagedMcpHttp.reap(child);
@@ -183,17 +184,21 @@ class PackagedSourceCatalogIT {
         }
     }
 
-    private record Reply(int exit, String stdout, String stderr) {
+    private record Reply(String invocation, int exit, String stdout, String stderr) {
+
+        String diagnostics() {
+            return "%s exited %d%nstdout: %.1000s%nstderr: %.1000s".formatted(invocation, exit, stdout, stderr);
+        }
 
         void assertUsageError() {
-            assertNotEquals(0, exit);
-            assertTrue(stdout.isBlank());
-            assertTrue(stderr.contains("Usage:") && stderr.contains("policies"));
+            assertNotEquals(0, exit, this::diagnostics);
+            assertTrue(stdout.isBlank(), this::diagnostics);
+            assertTrue(stderr.contains("Usage:") && stderr.contains("policies"), this::diagnostics);
         }
 
         JsonNode json(int expectedExit) throws IOException {
-            assertEquals(expectedExit, exit);
-            assertTrue(stderr.isBlank(), "Expected the machine-readable response on stdout.");
+            assertEquals(expectedExit, exit, this::diagnostics);
+            assertTrue(stderr.isBlank(), this::diagnostics);
             return JSON.readTree(stdout);
         }
 

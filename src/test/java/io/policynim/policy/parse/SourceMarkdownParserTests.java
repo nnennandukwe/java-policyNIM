@@ -50,6 +50,63 @@ class SourceMarkdownParserTests {
     }
 
     @Test
+    void acceptsAnApostropheInAnInlineTagWhenTheTagIsQuoted() {
+        String policy = "---\ntags: [%s]\n---\n# Source\n";
+        assertThatThrownBy(() -> parser.parse("policies/a.md", policy.formatted("can't")))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("Frontmatter contains an unterminated quoted string.");
+        var quoted = parser.parse("policies/a.md", policy.formatted("\"can't\""));
+        assertThat(quoted.metadata().tags()).containsExactly("can't");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"123", "true", "null"})
+    void keepsScalarReasonsAsTextAndRequiresStringMatchers(String value) {
+        String policy = """
+            ---
+            runtime_rules:
+              - action: file_write
+                effect: block
+                reason: %s
+                path_globs: [%s]
+            ---
+            Body
+            """;
+        String quoted = "\"" + value + "\"";
+        var bareReason = parser.parseSource("policies/a.md", policy.formatted(value, quoted)).rules().getFirst();
+        var quotedReason = parser.parseSource("policies/a.md", policy.formatted(quoted, quoted)).rules().getFirst();
+        assertThat(bareReason.reason()).isEqualTo(value);
+        assertThat(quotedReason.reason()).isEqualTo(value);
+        assertThat(bareReason.pathGlobs()).containsExactly(value);
+        assertThatThrownBy(() -> parser.parse("policies/a.md", policy.formatted(value, value)))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("Policy document policies/a.md has invalid runtime_rules at line 6: "
+                + "matcher list items must be strings, not YAML booleans, nulls, numbers, or maps.");
+    }
+
+    @Test
+    void reportsTheLastItemLineOfADuplicateMatcherField() {
+        String policy = """
+            ---
+            policy_id: TEST-1
+            runtime_rules:
+              - action: file_write
+                effect: block
+                reason: Review
+                path_globs: [first]
+                path_globs:
+                  - second
+                  - third
+            ---
+            Body
+            """;
+        assertThatThrownBy(() -> parser.parse("policies/fixture.md", policy))
+            .isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("Policy document policies/fixture.md has invalid runtime_rules at line 10: "
+                + "duplicate rule key `path_globs`.");
+    }
+
+    @Test
     void preservesStringMatchersWithHexOrUnderscoreSpellings() {
         String policy = "---\nruntime_rules:\n  - action: file_write\n    effect: block\n"
             + "    reason: Review\n    path_globs: [%s]\n---\n# Source\n";
