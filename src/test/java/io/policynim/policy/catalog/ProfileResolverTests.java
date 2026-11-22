@@ -175,6 +175,32 @@ class ProfileResolverTests {
         assertThat(ProfileResolver.diff(file).get("validation_error").isNull()).isTrue();
     }
 
+    @Test
+    void diffTracksRevisionsByPackAndPolicyWhenAPolicyMovesAndVersionChanges() throws Exception {
+        installDecisionFixture();
+        Path profile = temporary.resolve("team.toml");
+        Path baseManifest = temporary.resolve("base/pack.toml");
+        Path teamManifest = temporary.resolve("team/pack.toml");
+        String base = Files.readString(baseManifest);
+        String team = Files.readString(teamManifest);
+        Files.writeString(baseManifest, base.replace("1.0.0", "1.0.1"));
+        var changedVersion = ProfileResolver.diff(profile);
+        assertThat(changedVersion.get("changed").toString()).isEqualTo("[\"A\",\"B\",\"C\"]");
+        assertThat(changedVersion.get("changed_packs").toString()).isEqualTo("[\"review.base\"]");
+        assertThat(changedVersion.get("invalidated_decisions").toString()).isEqualTo("[\"A\",\"B\"]");
+
+        String member = "[[policies]]\npolicy_id = \"C\"\npath = \"C.md\"\n";
+        Files.move(temporary.resolve("base/C.md"), temporary.resolve("team/C.md"));
+        Files.writeString(baseManifest, base.replace(member, ""));
+        Files.writeString(teamManifest, team + member);
+        var moved = ProfileResolver.diff(profile);
+        assertThat(moved.get("added").toString()).isEqualTo("[\"C\"]");
+        assertThat(moved.get("removed").toString()).isEqualTo("[\"C\"]");
+        assertThat(moved.get("changed")).isEmpty();
+        assertThat(moved.get("changed_packs").toString()).isEqualTo("[\"review.base\",\"review.team\"]");
+        assertThat(moved.get("validation_error").isNull()).isTrue();
+    }
+
     private JsonNode installDecisionFixture() throws Exception {
         var fixture = new ObjectMapper().readTree(getClass().getResource("/parity/catalog/profile-decisions.json"));
         for (var member : fixture.get("files").properties()) {
