@@ -2,6 +2,8 @@ package io.policynim.cli;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -10,6 +12,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -82,6 +85,62 @@ class ProfileCommandTests {
         Path profile = dir.resolve("profiles").resolve("team.toml");
         assertThat(run("profile", "init", profile.toString())).isZero();
         assertThat(out.toString(UTF_8).lines().findFirst()).contains("Created pinned profile: " + profile);
+    }
+
+    @Test
+    void diffKeepsMultilineNamesInJsonAndDisplaysOneLinePerTextField(@TempDir Path dir) throws Exception {
+        Path profile = dir.resolve("team.toml");
+        assertThat(run("profile", "init", profile.toString())).isZero();
+        String digest = "sha256:" + "0".repeat(64);
+        Files.writeString(profile, """
+            "handoff\\nreview\\towner" = "%s"
+            [[exclusions]]
+            target_id = "handoff\\nreview\\towner"
+            expected_digest = "%s"
+            reason = "Review the handoff."
+            """.formatted(digest, digest), StandardOpenOption.APPEND);
+
+        out.reset();
+        assertThat(run("profile", "diff", "--format=json", profile.toString())).isZero();
+        var report = json.readTree(out.toByteArray());
+        assertThat(report.at("/removed/0").textValue()).isEqualTo("handoff\nreview\towner");
+        assertThat(report.at("/invalidated_decisions/0").textValue()).isEqualTo("handoff\nreview\towner");
+        assertThat(report.required("validation_error").textValue())
+            .isEqualTo("Unknown target 'handoff\\nreview\\towner'; review IDs.");
+
+        out.reset();
+        assertThat(run("profile", "diff", profile.toString())).isZero();
+        assertThat(out.toString(UTF_8).lines()).hasSize(8).contains(
+            "removed: handoff\\u000areview\\u0009owner",
+            "invalidated_decisions: handoff\\u000areview\\u0009owner",
+            "Update blocked: Unknown target 'handoff\\nreview\\towner'; review IDs.");
+        assertThat(err.size()).isZero();
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void initKeepsTheJsonErrorPathAndDisplaysItOnOneLine(@TempDir Path dir) throws Exception {
+        Path pack = Files.createDirectory(dir.resolve("handoff\nreview\towner"));
+        Path selector = Files.createSymbolicLink(dir.resolve("team-pack"), pack);
+        Files.writeString(pack.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "team"
+            version = "1.0.0"
+            [[policies]]
+            policy_id = "handoff"
+            path = "handoff.md"
+            """);
+        Files.writeString(pack.resolve("handoff.md"), "");
+        String path = dir.resolve("team.toml").toString();
+        String message = "Policy document " + pack.getFileName() + "/handoff.md does not contain usable Markdown content.";
+        assertThat(run("profile", "init", path, "--pack", selector.toString(), "--format=json")).isOne();
+        assertThat(json.readTree(out.toByteArray()).required("message").textValue()).isEqualTo(message);
+        assertThat(err.size()).isZero();
+
+        out.reset();
+        assertThat(run("profile", "init", path, "--pack", selector.toString())).isOne();
+        assertThat(out.size()).isZero();
+        assertThat(err.toString(UTF_8).lines()).containsExactly(message.replace("\n", "\\u000a").replace("\t", "\\u0009"));
     }
 
     @Test

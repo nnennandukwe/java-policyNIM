@@ -57,7 +57,7 @@ public final class ProfileCommand {
             if (options.json()) {
                 output.println(JsonNodeFactory.instance.objectNode().put("status", "error").put("message", invalid.getMessage()));
             } else {
-                errors.println(invalid.getMessage());
+                errors.println(singleLine(invalid.getMessage()));
             }
             return 1;
         }
@@ -96,7 +96,7 @@ public final class ProfileCommand {
         for (String field : List.of("added", "changed", "removed", "changed_packs", "invalidated_decisions")) {
             var names = new StringJoiner(", ").setEmptyValue("(none)");
             for (JsonNode id : report.required(field)) {
-                names.add(id.textValue());
+                names.add(singleLine(id.textValue()));
             }
             output.printf("%s: %s%n", field, names);
         }
@@ -106,9 +106,13 @@ public final class ProfileCommand {
         if (invalid.isNull()) {
             output.println("To apply reviewed pins, use the Python CLI's profile update command with --expect-digest " + token);
         } else {
-            output.println("Update blocked: " + invalid.textValue());
+            output.println("Update blocked: " + singleLine(invalid.textValue()));
             output.println("Review current_policies with --format json for new text and target digests.");
         }
+    }
+
+    private static String singleLine(String value) {
+        return SourceCatalogCommand.pathForDisplay(value, false);
     }
 
     private static void preview(SourceCatalog catalog, boolean json, PrintStream output) {
