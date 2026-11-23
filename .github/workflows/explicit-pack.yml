@@ -49,7 +49,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Verify native pack access and profile publication
-        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests,WindowsProfilePathTests,WindowsProfileStageTests" test
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests,PosixProfileDirectoryTests,WindowsProfilePathTests,WindowsProfileStageTests" test
       - name: Package the installed jar
         run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
       - name: Verify source inspection and bundled assets in the installed jar

@@ -4,7 +4,6 @@ import io.policynim.policy.parse.InvalidPolicyDocumentException;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -20,12 +19,9 @@ final class ProfileInitializer {
         if (!PolicyProfile.NAME.matcher(profileId).matches()) {
             throw new InvalidPolicyDocumentException("Invalid profile ID. Use a lowercase name of 1 to 128 characters.");
         }
-        var absolute = file.toAbsolutePath();
-        if (absolute.getFileName() == null) {
-            throw new InvalidPolicyDocumentException("Choose a new file for the profile.");
-        }
-        try {
-            Path parent = resolveParent(absolute.getParent());
+        try (var destination = ProfileDestination.select(file)) {
+            Path output = destination.path();
+            Path parent = output.getParent();
             var pins = new ArrayList<PolicyProfile.Pin>();
             var validationPins = new ArrayList<PolicyProfile.Pin>();
             var ids = new HashSet<String>();
@@ -47,10 +43,9 @@ final class ProfileInitializer {
                 // An uncreated output parent can't be traversed to resolve its relative pins yet.
                 validationPins.add(new PolicyProfile.Pin(posix(root), pin.packId(), pin.version(), pin.digest(), pin.policies()));
             }
-            var output = parent.resolve(absolute.getFileName());
             var profile = profile(profileId, pins);
             ProfileResolver.resolve(output, profile(profileId, validationPins));
-            new ProfilePublication().publish(output, InitialProfileToml.render(profile));
+            new ProfilePublication().publish(destination, InitialProfileToml.render(profile));
             return profile;
         } catch (IOException | InvalidPathException error) {
             throw new InvalidPolicyDocumentException(
@@ -70,26 +65,6 @@ final class ProfileInitializer {
             throw new InvalidPolicyDocumentException(
                 "Selected pack directory doesn't exist. Pass the directory containing pack.toml with --pack.", missing);
         }
-    }
-
-    // Resolve existing ancestors in order, including symlinks that precede a missing directory.
-    private static Path resolveParent(Path absolute) throws IOException {
-        Path current = absolute.getRoot();
-        for (Path part : absolute) {
-            if (part.toString().equals("..")) {
-                current = current.getParent() == null ? current : current.getParent();
-            } else if (!part.toString().equals(".")) {
-                current = current.resolve(part);
-                try {
-                    current = current.toRealPath();
-                } catch (NoSuchFileException missing) {
-                    if (Files.isSymbolicLink(current)) {
-                        throw missing;
-                    }
-                }
-            }
-        }
-        return current;
     }
 
     private static String relativeSelector(Path parent, Path root) {

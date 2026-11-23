@@ -25,8 +25,53 @@ class ProfilePublicationTests {
 
     @BeforeEach
     void selectPublicationDirectory(@TempDir Path directory) throws IOException {
-        // ProfileInitializer resolves existing directories before passing the destination to the publisher.
         workspace = directory.toRealPath();
+    }
+
+    private static void publish(ProfilePublication publisher, Path output, String contents) throws IOException {
+        try (var destination = ProfileDestination.select(output)) {
+            publisher.publish(destination, contents);
+        }
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void resolvesAParentComponentAfterFollowingASelectedDirectoryAlias() throws IOException {
+        var actual = Files.createDirectories(workspace.resolve("sources/reviews/accepted"));
+        var alias = Files.createSymbolicLink(workspace.resolve("accepted"), actual);
+        var input = alias.resolve("../drafts/team.toml");
+        var expected = actual.getParent().resolve("drafts/team.toml");
+
+        try (var destination = ProfileDestination.select(input)) {
+            assertThat(destination.path()).isEqualTo(expected);
+            assertThat(expected.getParent()).doesNotExist();
+            new ProfilePublication().publish(destination, "Reviewed profile.");
+        }
+
+        assertThat(Files.isSameFile(input, expected)).isTrue();
+        assertThat(Files.readString(input)).isEqualTo("Reviewed profile.");
+    }
+
+    @Test
+    @EnabledOnOs({OS.LINUX, OS.MAC})
+    void reportsWhenTheSelectedAncestorMovesBeforeNestedPublication() throws IOException {
+        var original = Files.createDirectory(workspace.resolve("reviews"));
+        var moved = workspace.resolve("archived-reviews");
+        var output = original.resolve("new/nested/profile.toml");
+
+        try (var destination = ProfileDestination.select(output)) {
+            assertThat(original.resolve("new")).doesNotExist();
+            Files.move(original, moved);
+            assertThatThrownBy(() -> new ProfilePublication().publish(destination, "Reviewed profile."))
+                .isInstanceOf(InvalidPolicyDocumentException.class)
+                .hasMessageContaining("selected profile directory").hasMessageContaining("retry");
+        }
+
+        assertThat(original).doesNotExist();
+        assertThat(moved).isEmptyDirectory();
+        var recovered = moved.resolve("new/nested/profile.toml");
+        publish(new ProfilePublication(), recovered, "Recovered.");
+        assertThat(Files.readString(recovered)).isEqualTo("Recovered.");
     }
 
     @Test
@@ -34,7 +79,7 @@ class ProfilePublicationTests {
         var zip = URI.create("jar:" + workspace.resolve("profiles.zip").toUri());
         try (var fs = FileSystems.newFileSystem(zip, Map.of("create", "true"))) {
             Path output = fs.getPath("/profiles/new.toml");
-            assertThatThrownBy(() -> new ProfilePublication().publish(output, "Profile."))
+            assertThatThrownBy(() -> publish(new ProfilePublication(), output, "Profile."))
                 .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("local filesystem");
             assertThat(Files.exists(output.getParent())).isFalse();
         }
@@ -70,10 +115,10 @@ class ProfilePublicationTests {
                 super.commit(stage, outputName);
             }
         };
-        assertThatThrownBy(() -> publisher.publish(output, "repaired")).isInstanceOf(IOException.class)
+        assertThatThrownBy(() -> publish(publisher, output, "repaired")).isInstanceOf(IOException.class)
             .hasMessage(failure);
         assertThat(workspace.toFile().list()).isEmpty();
-        new ProfilePublication().publish(output, "repaired");
+        publish(new ProfilePublication(), output, "repaired");
         assertThat(Files.readString(output)).isEqualTo("repaired");
     }
 
@@ -89,7 +134,7 @@ class ProfilePublicationTests {
                 super.commit(stage, outputName);
             }
         };
-        assertThatThrownBy(() -> publisher.publish(selected.resolve("profile.toml"), "Reviewed profile."))
+        assertThatThrownBy(() -> publish(publisher, selected.resolve("profile.toml"), "Reviewed profile."))
             .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("profile was created");
         assertThat(Files.readString(relocated.resolve("profile.toml"))).isEqualTo("Reviewed profile.");
         assertThat(selected).doesNotExist();
@@ -105,10 +150,10 @@ class ProfilePublicationTests {
                 throw new IOException("Temporary identity lookup failure.");
             }
         };
-        assertThatThrownBy(() -> publisher.publish(output, "Complete profile.")).isInstanceOf(IOException.class)
+        assertThatThrownBy(() -> publish(publisher, output, "Complete profile.")).isInstanceOf(IOException.class)
             .hasMessageContaining("identity lookup");
         assertThat(workspace.toFile().list()).isEmpty();
-        new ProfilePublication().publish(output, "Complete profile.");
+        publish(new ProfilePublication(), output, "Complete profile.");
         assertThat(Files.readString(output)).isEqualTo("Complete profile.");
     }
 
@@ -130,7 +175,7 @@ class ProfilePublicationTests {
                 throw new IOException("Interrupted write.");
             }
         };
-        assertThatThrownBy(() -> publisher.publish(output, "Complete profile."))
+        assertThatThrownBy(() -> publish(publisher, output, "Complete profile."))
             .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("unverified staging entry");
         assertThat(output).doesNotExist();
         try (var entries = Files.list(workspace)) {
@@ -138,7 +183,7 @@ class ProfilePublicationTests {
             assertThat(Files.readString(retained.resolve("profile"))).isEqualTo("Unrelated file.");
             assertThat(Files.readString(retained.resolve("earlier"))).isEqualTo("Complete profile.");
         }
-        new ProfilePublication().publish(output, "Recovered.");
+        publish(new ProfilePublication(), output, "Recovered.");
         assertThat(Files.readString(output)).isEqualTo("Recovered.");
     }
 
@@ -158,11 +203,11 @@ class ProfilePublicationTests {
             }
         };
         String contents = fixture.required("authoredProfile").textValue();
-        assertThatThrownBy(() -> publisher.publish(output, contents)).isInstanceOf(InvalidPolicyDocumentException.class)
+        assertThatThrownBy(() -> publish(publisher, output, contents)).isInstanceOf(InvalidPolicyDocumentException.class)
             .hasMessageContaining("profile was created").hasMessageContaining("Inspect");
         assertThat(Files.readString(output)).isEqualTo(contents);
         assertThat(ProfileResolver.resolve(output).list().get("authored_count").intValue()).isEqualTo(3);
-        assertThatThrownBy(() -> new ProfilePublication().publish(output, "another profile"))
+        assertThatThrownBy(() -> publish(new ProfilePublication(), output, "another profile"))
             .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("already exists");
         assertThat(Files.readString(output)).isEqualTo(contents);
     }
@@ -190,7 +235,7 @@ class ProfilePublicationTests {
                 Files.writeString(stage, "Unrelated content.");
             }
         };
-        assertThatThrownBy(() -> publisher.publish(output, "Complete initial profile."))
+        assertThatThrownBy(() -> publish(publisher, output, "Complete initial profile."))
             .isInstanceOf(InvalidPolicyDocumentException.class).hasMessageContaining("changed");
         assertThat(output).doesNotExist();
         try (var names = Files.list(parent)) {
@@ -198,7 +243,7 @@ class ProfilePublicationTests {
             assertThat(remaining).hasSize(1);
             assertThat(Files.readString(remaining.getFirst())).isEqualTo("Unrelated content.");
         }
-        new ProfilePublication().publish(output, "Complete initial profile.");
+        publish(new ProfilePublication(), output, "Complete initial profile.");
         assertThat(Files.readString(output)).isEqualTo("Complete initial profile.");
     }
 }

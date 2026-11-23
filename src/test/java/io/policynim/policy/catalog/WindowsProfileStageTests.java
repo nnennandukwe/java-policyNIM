@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -47,23 +48,57 @@ class WindowsProfileStageTests {
     void publishesTheUnicodeNameAndKeepsTheFirstFileOnCollision(@TempDir Path root) throws Exception {
         Path directory = root.toRealPath();
         byte[] first = {1, 2, 3};
-        try (var stage = new WindowsProfileStage(directory)) {
-            stage.write(first);
-            stage.force();
-            stage.verify();
-            stage.publish(NAME);
-            stage.verifyDirectory();
-            stage.discard();
-        }
-        try (var second = new WindowsProfileStage(directory)) {
-            second.write(new byte[]{4, 5});
-            second.force();
-            assertThatThrownBy(() -> second.publish(NAME)).isInstanceOf(FileAlreadyExistsException.class);
-            second.discard();
+        try (var selected = new WindowsProfileDirectory(directory)) {
+            try (var stage = selected.stage()) {
+                stage.write(first);
+                stage.force();
+                stage.verify();
+                stage.publish(NAME);
+                stage.verifyDirectory();
+                stage.discard();
+            }
+            try (var second = selected.stage()) {
+                second.write(new byte[]{4, 5});
+                second.force();
+                assertThatThrownBy(() -> second.publish(NAME)).isInstanceOf(FileAlreadyExistsException.class);
+                second.discard();
+            }
         }
         assertThat(Files.readAllBytes(directory.resolve(NAME))).isEqualTo(first);
         try (var contents = Files.list(directory)) {
             assertThat(contents.toList()).containsExactly(directory.resolve(NAME));
+        }
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void opensTheSameNestedDirectoriesForCooperatingInitializers(@TempDir Path root) throws Exception {
+        Path directory = root.toRealPath();
+        Files.writeString(directory.resolve("notes"), "operator notes");
+        try (var first = new WindowsProfileDirectory(directory);
+             var second = new WindowsProfileDirectory(directory)) {
+            assertThatThrownBy(() -> first.descend("notes")).isInstanceOf(IOException.class);
+            first.descend("profiles");
+            second.descend("profiles");
+            second.descend("r\u00e9view");
+            first.descend("r\u00e9view");
+            try (var stage = first.stage()) {
+                stage.write(new byte[]{1, 2});
+                stage.force();
+                stage.verify();
+                stage.publish(NAME);
+                stage.verifyDirectory();
+            }
+            try (var stage = second.stage()) {
+                assertThatThrownBy(() -> stage.publish(NAME)).isInstanceOf(FileAlreadyExistsException.class);
+                stage.discard();
+            }
+        }
+        assertThat(Files.readString(directory.resolve("notes"))).isEqualTo("operator notes");
+        Path nested = directory.resolve("profiles").resolve("r\u00e9view");
+        assertThat(Files.readAllBytes(nested.resolve(NAME))).containsExactly(1, 2);
+        try (var files = Files.list(nested)) {
+            assertThat(files.toList()).containsExactly(nested.resolve(NAME));
         }
     }
 }

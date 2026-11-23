@@ -2,40 +2,25 @@ package io.policynim.policy.catalog;
 
 import jnr.constants.platform.Errno;
 import jnr.constants.platform.OpenFlags;
-import jnr.ffi.LibraryLoader;
 import jnr.ffi.Platform;
-import jnr.ffi.annotations.In;
-import jnr.ffi.annotations.SaveError;
-import jnr.ffi.annotations.Variadic;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.UUID;
 
 import static io.policynim.policy.catalog.PosixPackDirectory.POSIX_API;
+import static io.policynim.policy.catalog.PosixProfileDirectory.NATIVE;
+import static io.policynim.policy.catalog.PosixProfileDirectory.errno;
+import static io.policynim.policy.catalog.PosixProfileDirectory.name;
 
 /** Stages private bytes and resolves publication and cleanup names against held directory descriptors. */
 final class PosixProfileStage extends ProfileStage {
-    public interface DirectoryCalls {
-        @SaveError int mkdirat(int parent, @In byte[] name, int mode);
-        @SaveError @Variadic(fixedCount = 3) int openat(int parent, @In byte[] name, int flags, int mode);
-        @SaveError int linkat(int source, @In byte[] name, int destination, @In byte[] output, int flags);
-        @SaveError int unlinkat(int parent, @In byte[] name, int flags);
-    }
-
-    private static final Platform PLATFORM = Platform.getNativePlatform();
-    private static final boolean DARWIN = PLATFORM.getOS() == Platform.OS.DARWIN;
-    private static final DirectoryCalls NATIVE = LibraryLoader.create(DirectoryCalls.class)
-        .load(PLATFORM.getStandardCLibraryName());
     private static final int DIRECTORY = flags(OpenFlags.O_RDONLY, OpenFlags.O_DIRECTORY);
     private static final int REGULAR = flags(OpenFlags.O_RDONLY, OpenFlags.O_NONBLOCK);
     private static final int CREATE = flags(OpenFlags.O_CREAT, OpenFlags.O_EXCL, OpenFlags.O_RDWR);
-    private static final int AT_REMOVEDIR = DARWIN ? 0x80 : 0x200;
+    private static final int AT_REMOVEDIR = Platform.getNativePlatform().getOS() == Platform.OS.DARWIN ? 0x80 : 0x200;
     private static final byte[] BODY = name("profile");
 
     private final PosixPackDirectory parent;
@@ -44,8 +29,8 @@ final class PosixProfileStage extends ProfileStage {
     private int directory = -1;
     private int file = -1;
 
-    PosixProfileStage(Path selected) throws IOException {
-        parent = new PosixPackDirectory(selected);
+    PosixProfileStage(PosixPackDirectory parent) {
+        this.parent = parent;
     }
 
     @Override
@@ -136,7 +121,7 @@ final class PosixProfileStage extends ProfileStage {
 
     @Override
     public void close() throws IOException {
-        try (parent; Closeable closeDirectory = () -> closeFd(directory)) {
+        try (Closeable closeDirectory = () -> closeFd(directory)) {
             closeFd(file);
         }
     }
@@ -154,20 +139,11 @@ final class PosixProfileStage extends ProfileStage {
         return result;
     }
 
-    private static int errno() {
-        return jnr.ffi.Runtime.getRuntime(NATIVE).getLastError();
-    }
-
     private static int flags(OpenFlags... values) {
         int result = OpenFlags.O_CLOEXEC.intValue() | OpenFlags.O_NOFOLLOW.intValue();
         for (var value : values) {
             result |= value.intValue();
         }
         return result;
-    }
-
-    private static byte[] name(String value) {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        return Arrays.copyOf(bytes, bytes.length + 1);
     }
 }

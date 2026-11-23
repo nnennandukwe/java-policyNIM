@@ -6,26 +6,19 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileSystems;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /** Publishes a complete new profile in the directory opened for this operation. */
 class ProfilePublication {
-    /** The caller resolves existing parent directories to their real paths before publication creates any missing ones. */
-    void publish(Path output, String contents) throws IOException {
-        if (output.getFileSystem() != FileSystems.getDefault()) {
-            throw new InvalidPolicyDocumentException("Choose a profile destination on the local filesystem.");
-        }
-        Path parent = Files.createDirectories(output.getParent());
+    /** Consumes the selection so handle-close failures can report whether the profile was created. */
+    void publish(ProfileDestination destination, String contents) throws IOException {
         boolean published = false;
         boolean located = false;
-        try (var stage = open(parent); Closeable cleanup = () -> discard(stage)) {
+        try (destination; var stage = destination.stage(); Closeable cleanup = () -> discard(stage)) {
             write(stage, contents.getBytes(StandardCharsets.UTF_8));
             force(stage);
             verify(stage);
             try {
-                commit(stage, output.getFileName().toString());
+                commit(stage, destination.path().getFileName().toString());
             } catch (FileAlreadyExistsException exists) {
                 throw new InvalidPolicyDocumentException("Profile already exists. Choose a new path.", exists);
             }
@@ -45,15 +38,6 @@ class ProfilePublication {
                     + "Inspect the output directory before retrying.", error);
             }
             throw error;
-        }
-    }
-
-    private static ProfileStage open(Path directory) throws IOException {
-        try {
-            return directory.getFileSystem().getSeparator().equals("\\")
-                ? new WindowsProfileStage(directory) : new PosixProfileStage(directory);
-        } catch (LinkageError error) {
-            throw new IOException("Couldn't initialize native profile publication.", error);
         }
     }
 

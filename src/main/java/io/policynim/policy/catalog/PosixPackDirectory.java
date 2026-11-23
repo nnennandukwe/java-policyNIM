@@ -41,15 +41,24 @@ final class PosixPackDirectory extends PackDirectory {
     private final FileStat rootStat;
 
     PosixPackDirectory(Path root) throws IOException {
+        this(root, checked(CALLS.open(terminated(octets(rawPath(root))), DIRECTORY)));
+    }
+
+    /** Takes ownership of an already open directory descriptor, including on validation failure. */
+    PosixPackDirectory(Path root, int descriptor) throws IOException {
         super(root);
-        rawRoot = rawPath(root);
-        rootStat = POSIX_API.allocateStat();
-        rootFd = checked(CALLS.open(terminated(octets(rawRoot)), DIRECTORY));
+        rootFd = descriptor;
         try {
+            rawRoot = rawPath(root);
+            rootStat = POSIX_API.allocateStat();
             checked(POSIX_API.fstat(rootFd, rootStat));
             verifyRoot();
         } catch (IOException | RuntimeException | Error failure) {
-            checked(POSIX_API.close(rootFd));
+            try {
+                checked(POSIX_API.close(rootFd));
+            } catch (IOException | RuntimeException | Error closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
             throw failure;
         }
     }

@@ -48,9 +48,13 @@ final class WindowsPackDirectory extends PackDirectory {
     }
 
     WindowsPackDirectory(Path root, int additionalAccess) throws IOException {
+        this(root, openHandle(root, FILE_READ_ATTRIBUTES | additionalAccess,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT));
+    }
+
+    /** Takes ownership of an opened directory handle, including failure to validate it. */
+    WindowsPackDirectory(Path root, Pointer opened) throws IOException {
         super(root);
-        Pointer opened = openHandle(root, FILE_READ_ATTRIBUTES | additionalAccess,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
         try {
             int attributes = attributes(opened);
             if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
@@ -58,10 +62,21 @@ final class WindowsPackDirectory extends PackDirectory {
                 throw new ReaderFailure(Failure.ROOT_CHANGED, null);
             }
         } catch (IOException | RuntimeException | Error failure) {
-            closeHandle(opened);
+            try {
+                closeHandle(opened);
+            } catch (IOException cleanup) {
+                failure.addSuppressed(cleanup);
+            }
             throw failure;
         }
         rootHandle = opened;
+    }
+
+    void verifyPublicationRoot() throws IOException {
+        verifyRoot();
+        if (!fileId(rootHandle).equals(publicationFileId(root))) {
+            throw new IOException("The profile directory changed.");
+        }
     }
 
     private static Pointer openHandle(Path path, int access, int attributes) throws IOException {
