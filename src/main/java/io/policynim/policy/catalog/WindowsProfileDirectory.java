@@ -31,7 +31,7 @@ final class WindowsProfileDirectory implements ProfileDirectory {
     private WindowsPackDirectory current;
 
     WindowsProfileDirectory(Path existingRealDirectory) throws IOException {
-        current = new WindowsPackDirectory(existingRealDirectory, FILE_TRAVERSE);
+        current = WindowsPackDirectory.openProfileRoot(existingRealDirectory, FILE_TRAVERSE);
     }
 
     private WindowsPackDirectory selected() throws IOException {

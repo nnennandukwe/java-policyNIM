@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.channels.ClosedChannelException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
@@ -27,10 +28,10 @@ class PosixProfileDirectoryTests {
         Path anchor = workspace.toRealPath();
         var ready = new CyclicBarrier(2);
         try (var pool = Executors.newFixedThreadPool(2)) {
-            var a = pool.submit(writer(anchor, "first", ready));
-            var b = pool.submit(writer(anchor, "second", ready));
-            a.get(10, TimeUnit.SECONDS);
-            b.get(10, TimeUnit.SECONDS);
+            var firstWriter = pool.submit(writer(anchor, "first", ready));
+            var secondWriter = pool.submit(writer(anchor, "second", ready));
+            firstWriter.get(10, TimeUnit.SECONDS);
+            secondWriter.get(10, TimeUnit.SECONDS);
         }
         Path destination = anchor.resolve("profiles/team");
         assertThat(destination.toFile().list()).containsExactlyInAnyOrder("first", "second");
@@ -57,6 +58,55 @@ class PosixProfileDirectoryTests {
             }
             return null;
         };
+    }
+
+    @Test
+    void opensTheResolvedDirectoryAndRefusesAnUnresolvedIntermediateAlias() throws IOException {
+        Path real = Files.createDirectories(workspace.resolve("selected/output")).toRealPath();
+        Path alias = Files.createSymbolicLink(workspace.toRealPath().resolve("alias"), real.getParent()).resolve("output");
+        try (var directory = new PosixProfileDirectory(alias.toRealPath())) {
+            directory.descend("profiles");
+        }
+        assertThat(real.resolve("profiles")).isDirectory();
+        assertThatThrownBy(() -> {
+            try (var ignored = new PosixProfileDirectory(alias)) {
+                // An existing-only walk requires an already resolved path.
+            }
+        }).isInstanceOf(IOException.class);
+    }
+
+    @Test
+    void selectionDoesntCreateMissingDirectories() throws IOException {
+        Path real = workspace.toRealPath();
+        assertThatThrownBy(() -> {
+            try (var ignored = new PosixProfileDirectory(real.resolve("missing/team"))) {
+                // Source validation hasn't authorized directory creation yet.
+            }
+        }).isInstanceOf(IOException.class);
+        assertThat(real.resolve("missing")).doesNotExist();
+    }
+
+    @Test
+    void traversesSearchOnlyAncestorsAndPublishesInAWriteSearchDirectory() throws IOException {
+        Path ancestor = Files.createDirectory(workspace.resolve("parent"));
+        Path destination = Files.createDirectory(ancestor.resolve("output")).toRealPath();
+        try {
+            Files.setPosixFilePermissions(ancestor, PosixFilePermissions.fromString("--x------"));
+            Files.setPosixFilePermissions(destination, PosixFilePermissions.fromString("-wx------"));
+            try (var directory = new PosixProfileDirectory(destination)) {
+                try (var stage = directory.stage()) {
+                    stage.write("Reviewed.".getBytes(UTF_8));
+                    stage.force();
+                    stage.verify();
+                    stage.publish("profile.toml");
+                    stage.discard();
+                }
+            }
+            assertThat(Files.readString(destination.resolve("profile.toml"))).isEqualTo("Reviewed.");
+        } finally {
+            Files.setPosixFilePermissions(ancestor, PosixFilePermissions.fromString("rwx------"));
+            Files.setPosixFilePermissions(destination, PosixFilePermissions.fromString("rwx------"));
+        }
     }
 
     @Test

@@ -44,21 +44,32 @@ final class WindowsPackDirectory extends PackDirectory {
     final Pointer rootHandle;
 
     WindowsPackDirectory(Path root) throws IOException {
-        this(root, 0);
+        this(root, openDirectory(root, 0));
     }
 
-    WindowsPackDirectory(Path root, int additionalAccess) throws IOException {
-        this(root, openHandle(root, FILE_READ_ATTRIBUTES | additionalAccess,
-            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT));
+    static WindowsPackDirectory openProfileRoot(Path canonicalRoot, int additionalAccess) throws IOException {
+        return new WindowsPackDirectory(canonicalRoot, openDirectory(canonicalRoot, additionalAccess), true);
+    }
+
+    private static Pointer openDirectory(Path root, int additionalAccess) throws IOException {
+        return openHandle(root, FILE_READ_ATTRIBUTES | additionalAccess,
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
     }
 
     /** Takes ownership of an opened directory handle, including failure to validate it. */
     WindowsPackDirectory(Path root, Pointer opened) throws IOException {
+        this(root, opened, false);
+    }
+
+    private WindowsPackDirectory(Path root, Pointer opened, boolean canonicalProfileRoot) throws IOException {
         super(root);
         try {
             int attributes = attributes(opened);
-            if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0
-                    || !finalPath(opened).equals(root)) {
+            if ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+                throw new ReaderFailure(Failure.ROOT_CHANGED, null);
+            }
+            Path actual = finalPath(opened);
+            if (!(canonicalProfileRoot ? sameResolvedProfilePath(root, actual) : root.equals(actual))) {
                 throw new ReaderFailure(Failure.ROOT_CHANGED, null);
             }
         } catch (IOException | RuntimeException | Error failure) {
@@ -70,6 +81,13 @@ final class WindowsPackDirectory extends PackDirectory {
             throw failure;
         }
         rootHandle = opened;
+    }
+
+    // toRealPath supplies the stored spelling of every directory below the drive or UNC root.
+    static boolean sameResolvedProfilePath(Path selected, Path actual) {
+        Path root = selected.getRoot();
+        return root.equals(actual.getRoot())
+            && root.relativize(selected).toString().equals(root.relativize(actual).toString());
     }
 
     void verifyPublicationRoot() throws IOException {

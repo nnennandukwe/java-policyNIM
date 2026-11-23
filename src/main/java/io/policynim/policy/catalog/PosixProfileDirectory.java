@@ -25,12 +25,41 @@ final class PosixProfileDirectory implements ProfileDirectory {
 
     static final DirectoryCalls NATIVE = LibraryLoader.create(DirectoryCalls.class)
         .load(Platform.getNativePlatform().getStandardCLibraryName());
-    private static final int OPEN_DIRECTORY = OpenFlags.O_DIRECTORY.intValue() | OpenFlags.O_RDONLY.intValue()
+    // JNR's OpenFlags omits these search modes from XNU sys/fcntl.h and Linux UAPI asm/fcntl.h.
+    private static final int DARWIN_O_EXEC = 0x40000000;
+    private static final int LINUX_O_PATH = 010000000;
+    private static final int LINUX_SPARC_O_PATH = 0x1000000;
+    private static final int OPEN_DIRECTORY = OpenFlags.O_DIRECTORY.intValue() | searchMode()
         | OpenFlags.O_NOFOLLOW.intValue() | OpenFlags.O_CLOEXEC.intValue();
     private PosixPackDirectory current;
 
     PosixProfileDirectory(Path existingRealDirectory) throws IOException {
-        current = new PosixPackDirectory(existingRealDirectory);
+        if (!existingRealDirectory.isAbsolute() || !existingRealDirectory.equals(existingRealDirectory.normalize())) {
+            throw new IOException("Choose a resolved absolute profile directory.");
+        }
+        current = PosixPackDirectory.openFileSystemRoot(OPEN_DIRECTORY);
+        try {
+            for (Path component : existingRealDirectory) {
+                openChild(component, false);
+            }
+        } catch (IOException | RuntimeException | Error failure) {
+            try (var owned = current) {
+                throw failure;
+            }
+        }
+    }
+
+    private static int searchMode() {
+        var platform = Platform.getNativePlatform();
+        return switch (platform.getOS()) {
+            case DARWIN -> DARWIN_O_EXEC; // O_SEARCH is O_EXEC | O_DIRECTORY.
+            case LINUX -> switch (platform.getCPU()) {
+                case SPARC, SPARCV9 -> LINUX_SPARC_O_PATH;
+                case UNKNOWN -> OpenFlags.O_RDONLY.intValue();
+                default -> LINUX_O_PATH;
+            };
+            default -> OpenFlags.O_RDONLY.intValue();
+        };
     }
 
     @Override
@@ -39,11 +68,15 @@ final class PosixProfileDirectory implements ProfileDirectory {
                 || component.indexOf('/') >= 0 || component.indexOf('\0') >= 0) {
             throw new IOException("Choose a directory name inside the selected profile destination.");
         }
+        openChild(Path.of(component), true);
+    }
+
+    private void openChild(Path component, boolean allowCreation) throws IOException {
         var parent = checkedDirectory();
         Path child = parent.root.resolve(component);
-        byte[] leaf = name(component);
+        byte[] leaf = PosixPackDirectory.nativeFileName(child);
         int fd = NATIVE.openat(parent.descriptor(), leaf, OPEN_DIRECTORY, 0);
-        if (fd < 0 && errno() == Errno.ENOENT.intValue()) {
+        if (fd < 0 && allowCreation && errno() == Errno.ENOENT.intValue()) {
             // Use normal directory permissions subject to the caller's umask.
             if (NATIVE.mkdirat(parent.descriptor(), leaf, 0777) < 0 && errno() != Errno.EEXIST.intValue()) {
                 throw new IOException("Couldn't create the selected profile directory. Check directory access and retry.");

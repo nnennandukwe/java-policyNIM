@@ -44,6 +44,15 @@ final class PosixPackDirectory extends PackDirectory {
         this(root, checked(CALLS.open(terminated(octets(rawPath(root))), DIRECTORY)));
     }
 
+    static PosixPackDirectory openFileSystemRoot(int flags) throws IOException {
+        return new PosixPackDirectory(Path.of("/"), checked(CALLS.open(new byte[] {'/', 0}, flags)));
+    }
+
+    static byte[] nativeFileName(Path path) {
+        String raw = rawPath(path);
+        return terminated(octets(raw.substring(raw.lastIndexOf('/') + 1)));
+    }
+
     /** Takes ownership of an already open directory descriptor, including on validation failure. */
     PosixPackDirectory(Path root, int descriptor) throws IOException {
         super(root);

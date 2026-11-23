@@ -72,6 +72,25 @@ class WindowsProfileStageTests {
 
     @Test
     @EnabledOnOs(OS.WINDOWS)
+    void checksResolvedDirectoryNamesAndAcceptsDriveAndShareRootCasing(@TempDir Path root) throws Exception {
+        Path actual = Files.createDirectory(root.resolve("Review")).toRealPath();
+        try (var selected = new WindowsProfileDirectory(actual)) {
+            try (var stage = selected.stage()) {
+                stage.verify();
+                stage.discard();
+            }
+        }
+        assertThatThrownBy(() -> new WindowsProfileDirectory(actual.resolveSibling("review")).close())
+            .isInstanceOf(IOException.class);
+        assertThat(WindowsPackDirectory.sameResolvedProfilePath(Path.of("C:\\Review"), Path.of("c:\\Review"))).isTrue();
+        assertThat(WindowsPackDirectory.sameResolvedProfilePath(Path.of("\\\\Host\\Share\\Review"),
+            Path.of("\\\\host\\share\\Review"))).isTrue();
+        assertThat(WindowsPackDirectory.sameResolvedProfilePath(Path.of("\\\\Host\\Share\\Review"),
+            Path.of("\\\\host\\share\\review"))).isFalse();
+    }
+
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
     void opensTheSameNestedDirectoriesForCooperatingInitializers(@TempDir Path root) throws Exception {
         Path directory = root.toRealPath();
         Files.writeString(directory.resolve("notes"), "operator notes");
