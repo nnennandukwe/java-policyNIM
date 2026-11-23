@@ -1,4 +1,5 @@
 schema_version = 1
+# non-English test data
 profile_id = "review" # café
 packs = [
   { path = "../team", pack_id = "review.team", version = "1.0.0", digest = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57", policies = { "C" = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57" } },
