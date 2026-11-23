@@ -27,7 +27,7 @@ record ProfileToml(TomlTable table, String prefix, List<String> errors) {
     private static final Pattern SAFE_FIELD = Pattern.compile("[A-Za-z_][A-Za-z_0-9-]{0,63}");
     private static final String UNREADABLE = "Couldn't read profile TOML. Check the profile path, permissions, and TOML syntax.";
 
-    record Document(PolicyProfile profile, String text) { }
+    record Document(PolicyProfile profile, String text, TomlTable table) { }
 
     static PolicyProfile read(Path file) {
         return document(file).profile();
@@ -37,15 +37,26 @@ record ProfileToml(TomlTable table, String prefix, List<String> errors) {
         if (!Files.isRegularFile(file)) {
             throw new InvalidPolicyDocumentException(UNREADABLE);
         }
-        TomlTable table;
-        String text;
         try {
-            text = Files.readString(file).replace("\r\n", "\n").replace('\r', '\n');
-            table = PolicyPackToml.decode(text.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException | InvalidPolicyDocumentException error) {
+            return parse(normalizeNewlines(Files.readString(file)));
+        } catch (IOException error) {
             throw new InvalidPolicyDocumentException(UNREADABLE, error);
         }
-        return new Document(new ProfileToml(table, "", new ArrayList<>()).profile(), text);
+    }
+
+    static String normalizeNewlines(String text) {
+        return text.replace("\r\n", "\n").replace('\r', '\n');
+    }
+
+    static Document parse(String normalizedText) {
+        TomlTable table;
+        try {
+            table = PolicyPackToml.decode(normalizedText.getBytes(StandardCharsets.UTF_8));
+        } catch (InvalidPolicyDocumentException error) {
+            throw new InvalidPolicyDocumentException(UNREADABLE, error);
+        }
+        var profile = new ProfileToml(table, "", new ArrayList<>()).profile();
+        return new Document(profile, normalizedText, table);
     }
 
     private PolicyProfile profile() {

@@ -1,0 +1,21 @@
+schema_version = 1
+profile_id = "review"
+
+[[packs]]
+path = "../team"
+pack_id = "review.team"
+version = "1.0.0"
+digest = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57"
+
+[packs.policies]
+C = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57"
+
+[[packs]]
+path = "../base"
+pack_id = "review.base"
+version = "1.0.0"
+digest = "sha256:dbc9af11cdda70b575d33126001cef97b68bad256d674469abc0cae6e65dda0e"
+
+[packs.policies]
+A = "sha256:4b8fb34ea4bc5f88f2ad75fea032c81853f3c4566f7ee333d3bf7f8fa9b227d8"
+B = "sha256:1c5b714c3ba0a9c3c1758907a31a74cc66a812ae8c4a3a3031e2975ed97a03ec" # removed note
