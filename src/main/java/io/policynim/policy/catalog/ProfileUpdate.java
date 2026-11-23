@@ -6,6 +6,7 @@ import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InterruptedIOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
@@ -59,6 +60,10 @@ final class ProfileUpdate {
         } catch (IOException | RuntimeException failure) {
             if (published != null) {
                 published.withArray("warnings").add(CLEANUP_WARNING);
+            } else if (failure instanceof InterruptedIOException || failure instanceof ClosedByInterruptException) {
+                Thread.currentThread().interrupt();
+                throw new InvalidPolicyDocumentException(
+                    "Profile update was interrupted. Rerun profile diff before retrying.", failure);
             } else if (failure instanceof RuntimeException unchecked) {
                 throw unchecked;
             } else {

@@ -124,7 +124,9 @@ class ProfileUpdateTests {
                 if (point.equals("force")) {
                     Thread.currentThread().interrupt();
                 }
-            })).isInstanceOf(InvalidPolicyDocumentException.class);
+            })).isInstanceOf(InvalidPolicyDocumentException.class)
+                .hasMessageContaining("Profile update was interrupted");
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
         }
