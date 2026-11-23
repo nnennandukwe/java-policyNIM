@@ -170,7 +170,7 @@ On Linux and macOS, init creates the profile with owner-only access. To use it f
 
 Diff reads the profile and its current sources. It lists added, changed and removed policy revisions, packs with changed pins and decisions that need another review. `current_policies` contains the current authored text and target digests before decisions are applied. If `validation_error` contains a message, use it to repair the profile or sources and rerun diff. A changed pack ID or an unreadable profile prevents a comparison and returns exit 1.
 
-The review digest binds the original profile text to the proposed pins. A changed comment can change the digest even when the policies stay the same. After you review the diff, copy its `review_digest` into the update command. The Java jar and Python CLI accept each other’s tokens for the same file and source revisions.
+The review digest binds the original profile text to the proposed pins. A changed comment can change the digest even when the policies stay the same. After you review the diff, set `REVIEW_DIGEST` to the `review_digest` from that report. The Java jar and Python CLI accept each other’s tokens for the same file and source revisions.
 
 ```sh
 java -jar /app/policynim.jar profile update /work/team.toml --expect-digest "$REVIEW_DIGEST"
