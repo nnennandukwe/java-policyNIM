@@ -2,14 +2,18 @@ package io.policynim.packaging;
 
 import io.policynim.ingest.IngestCommandLine;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,16 +24,13 @@ class ReleasePackagingContractsTests {
 
     @Test
     void ciWorkflowSplitsOfflineVerificationAndPackagingJobs() throws IOException {
-        Map<String, Object> workflow = yamlMap(".github/workflows/ci.yml");
+        Map<String, Object> workflow = yamlMap(REPOSITORY_ROOT.resolve(".github/workflows/ci.yml"));
         Map<String, Object> jobs = mapValue(workflow, "jobs");
 
         assertThat(jobs).containsOnlyKeys("unit", "integration", "acceptance", "archunit", "package");
         jobs.forEach((name, definition) -> {
             Map<String, Object> job = asMap(definition);
             assertThat(job).as(name).containsEntry("runs-on", "ubuntu-24.04");
-            assertThat(actionReferences(job)).as(name).allMatch(
-                ReleasePackagingContractsTests::usesPinnedActionReference
-            );
         });
 
         assertThat(runCommands(jobs, "unit"))
@@ -61,6 +62,16 @@ class ReleasePackagingContractsTests {
             .anySatisfy(command -> assertThat(command)
                 .contains("jar tf target/policynim.jar")
                 .contains("BOOT-INF/classes/application.yml"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"ci.yml", "explicit-pack.yml"})
+    void packagingWorkflowsPinRemoteActionsIncludingCompositeSteps(String workflow) throws IOException {
+        var jobs = mapValue(yamlMap(REPOSITORY_ROOT.resolve(".github/workflows").resolve(workflow)), "jobs");
+        Set<Path> checked = new HashSet<>();
+        for (var job : jobs.entrySet()) {
+            assertPinnedActions(asMap(job.getValue()), workflow + " " + job.getKey(), checked);
+        }
     }
 
     @Test
@@ -107,9 +118,26 @@ class ReleasePackagingContractsTests {
             .contains(IngestCommandLine.COMMAND_EXAMPLE);
     }
 
-    private static boolean usesPinnedActionReference(String actionReference) {
-        int separator = actionReference.lastIndexOf('@');
-        return separator > 0 && actionReference.substring(separator + 1).matches("[a-f0-9]{40}");
+    private static void assertPinnedActions(Map<String, Object> definition, String owner, Set<Path> checked)
+        throws IOException {
+        for (String reference : actionReferences(definition)) {
+            if (!reference.startsWith("./")) {
+                assertThat(reference).as("Remote action in %s", owner).matches("[^@]+@[a-f0-9]{40}");
+                continue;
+            }
+            Path directory = REPOSITORY_ROOT.resolve(reference);
+            Path manifest = directory.resolve("action.yml");
+            if (!Files.exists(manifest)) {
+                manifest = directory.resolve("action.yaml");
+            }
+            manifest = manifest.toRealPath();
+            assertThat(manifest.startsWith(REPOSITORY_ROOT.toRealPath())).as("Local action in %s", owner).isTrue();
+            if (checked.add(manifest)) {
+                var runs = mapValue(yamlMap(manifest), "runs");
+                assertThat(runs).as(reference).containsEntry("using", "composite");
+                assertPinnedActions(runs, reference, checked);
+            }
+        }
     }
 
     private static List<String> actionReferences(Map<String, Object> job) {
@@ -130,8 +158,8 @@ class ReleasePackagingContractsTests {
         return listOfMaps(job.get("steps"));
     }
 
-    private static Map<String, Object> yamlMap(String path) throws IOException {
-        try (Reader reader = Files.newBufferedReader(REPOSITORY_ROOT.resolve(path))) {
+    private static Map<String, Object> yamlMap(Path path) throws IOException {
+        try (Reader reader = Files.newBufferedReader(path)) {
             return asMap(new Yaml().load(reader));
         }
     }
