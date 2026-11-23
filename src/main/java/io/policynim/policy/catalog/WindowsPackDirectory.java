@@ -12,6 +12,7 @@ import jnr.ffi.Pointer;
 import jnr.ffi.Struct;
 import jnr.ffi.annotations.In;
 import jnr.ffi.annotations.Out;
+import jnr.ffi.annotations.SaveError;
 import jnr.ffi.byref.IntByReference;
 import jnr.posix.windows.WindowsByHandleFileInformation;
 
@@ -26,6 +27,8 @@ final class WindowsPackDirectory extends PackDirectory {
         int GetFinalPathNameByHandleW(Pointer handle, @Out byte[] path, int characters, int flags);
         int ReadFile(Pointer handle, @Out byte[] bytes, int length, @Out IntByReference count, Pointer overlapped);
         int WriteFile(Pointer handle, Pointer bytes, int length, @Out IntByReference count, Pointer overlapped);
+        @SaveError int LockFileEx(Pointer handle, int flags, int reserved, int lengthLow, int lengthHigh, Pointer overlapped);
+        Pointer LocalFree(Pointer memory);
         int FlushFileBuffers(Pointer handle);
         int CloseHandle(Pointer handle);
     }
@@ -173,21 +176,31 @@ final class WindowsPackDirectory extends PackDirectory {
                     || (attributes(handle) & FILE_ATTRIBUTE_DIRECTORY) != 0) {
                 throw new IOException("Couldn't validate the selected regular pack file.");
             }
-            var result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            var count = new IntByReference();
-            for (;;) {
-                if (API.ReadFile(handle, buffer, buffer.length, count, null) == 0) {
-                    throw new IOException("Couldn't read the selected pack file.");
-                }
-                int length = count.intValue();
-                if (length == 0) {
-                    return result.toByteArray();
-                }
-                result.write(buffer, 0, length);
-            }
+            return readAll(handle);
         } finally {
             closeHandle(handle);
+        }
+    }
+
+    static void requireRegularProfileFile(Pointer handle) throws IOException {
+        if ((attributes(handle) & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0) {
+            throw new IOException("Choose an ordinary profile file.");
+        }
+    }
+
+    static byte[] readAll(Pointer handle) throws IOException {
+        var result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        var count = new IntByReference();
+        for (;;) {
+            if (API.ReadFile(handle, buffer, buffer.length, count, null) == 0) {
+                throw new IOException("Couldn't read the selected file.");
+            }
+            int length = count.intValue();
+            if (length == 0) {
+                return result.toByteArray();
+            }
+            result.write(buffer, 0, length);
         }
     }
 

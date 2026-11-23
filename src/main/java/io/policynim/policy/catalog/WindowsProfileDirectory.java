@@ -27,7 +27,7 @@ final class WindowsProfileDirectory implements ProfileDirectory {
         static final jnr.ffi.Runtime RUNTIME = jnr.ffi.Runtime.getRuntime(API);
     }
 
-    private static final int FILE_TRAVERSE = 0x20;
+    static final int FILE_TRAVERSE = 0x20;
     private WindowsPackDirectory current;
 
     WindowsProfileDirectory(Path existingRealDirectory) throws IOException {
@@ -49,7 +49,7 @@ final class WindowsProfileDirectory implements ProfileDirectory {
         Path expected = parent.root.resolve(component);
         final int shareReadWriteDelete = 7, fileOpenIf = 3, directoryFile = 1;
         var child = openRelative(parent.rootHandle, component, FILE_TRAVERSE, shareReadWriteDelete,
-            fileOpenIf, directoryFile, "open or create the profile directory");
+            fileOpenIf, directoryFile, null, "open or create the profile directory");
         current = new WindowsPackDirectory(expected, child);
         parent.close();
     }
@@ -78,12 +78,12 @@ final class WindowsProfileDirectory implements ProfileDirectory {
 
     static Pointer createStageFile(Pointer parent, String name) throws IOException {
         final int delete = 0x10000, genericWrite = 0x40000000, shareReadDelete = 5, fileCreate = 2, nonDirectory = 0x40;
-        return openRelative(parent, name, genericWrite | delete, shareReadDelete, fileCreate, nonDirectory,
+        return openRelative(parent, name, genericWrite | delete, shareReadDelete, fileCreate, nonDirectory, null,
             "create the profile staging file");
     }
 
-    private static Pointer openRelative(Pointer parent, String name, int access, int sharing, int disposition,
-                                        int fileType, String operation) throws IOException {
+    static Pointer openRelative(Pointer parent, String name, int access, int sharing, int disposition,
+                                int fileType, Pointer securityDescriptor, String operation) throws IOException {
         final int synchronize = 0x100000, readAttributes = 0x80, fileAttributeNormal = 0x80;
         final int synchronousNonalert = 0x20, openReparsePoint = 0x200000;
         var runtime = Native.RUNTIME;
@@ -103,6 +103,7 @@ final class WindowsProfileDirectory implements ProfileDirectory {
         attributes.putPointer(pointerSize, parent);
         attributes.putPointer(2L * pointerSize, unicode);
         attributes.putInt(3L * pointerSize, 0x40); // OBJ_CASE_INSENSITIVE
+        attributes.putPointer(4L * pointerSize, securityDescriptor);
         var created = new PointerByReference();
         int status = Native.API.NtCreateFile(created, access | synchronize | readAttributes,
             attributes, ioStatusBlock(), null, fileAttributeNormal, sharing, disposition,

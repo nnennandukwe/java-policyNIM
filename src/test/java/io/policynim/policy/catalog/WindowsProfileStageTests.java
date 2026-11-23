@@ -27,7 +27,7 @@ class WindowsProfileStageTests {
     @ValueSource(ints = {4, 8})
     void laysOutARootedNoReplaceRenameForTheWindowsAbi(int pointerSize) {
         long handle = pointerSize == 8 ? 0x12345678abcdef01L : 0x89abcdefL;
-        byte[] raw = WindowsProfileStage.renameInformation(pointerSize, handle, NAME);
+        byte[] raw = WindowsProfileStage.renameInformation(pointerSize, handle, NAME, false);
         var info = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
         assertThat(info.getInt(0)).isZero();
         int rootOffset = pointerSize == 8 ? 8 : 4;
