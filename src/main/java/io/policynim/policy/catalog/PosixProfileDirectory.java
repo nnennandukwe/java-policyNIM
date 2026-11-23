@@ -20,6 +20,7 @@ final class PosixProfileDirectory implements ProfileDirectory {
         @SaveError int mkdirat(int parent, @In byte[] name, int mode);
         @SaveError @Variadic(fixedCount = 3) int openat(int parent, @In byte[] name, int flags, int mode);
         @SaveError int linkat(int source, @In byte[] name, int destination, @In byte[] output, int flags);
+        @SaveError int renameat(int source, @In byte[] name, int destination, @In byte[] output);
         @SaveError int unlinkat(int parent, @In byte[] name, int flags);
     }
 
@@ -95,7 +96,7 @@ final class PosixProfileDirectory implements ProfileDirectory {
         return new PosixProfileStage(checkedDirectory());
     }
 
-    private PosixPackDirectory checkedDirectory() throws IOException {
+    PosixPackDirectory checkedDirectory() throws IOException {
         if (current == null) {
             throw new ClosedChannelException();
         }

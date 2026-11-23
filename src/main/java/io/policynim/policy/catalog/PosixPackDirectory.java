@@ -181,20 +181,24 @@ final class PosixPackDirectory extends PackDirectory {
             if (!stat.isFile()) {
                 throw new IOException("Pack members must resolve to regular files.");
             }
-            var result = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            for (;;) {
-                int count = POSIX_API.read(descriptor, buffer, buffer.length);
-                if (count == 0) {
-                    return result.toByteArray();
-                }
-                if (count < 0 && POSIX_API.errno() == Errno.EINTR.intValue()) {
-                    continue;
-                }
-                result.write(buffer, 0, checked(count));
-            }
+            return readBytes(descriptor);
         } finally {
             checked(POSIX_API.close(descriptor));
+        }
+    }
+
+    static byte[] readBytes(int descriptor) throws IOException {
+        var result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        for (;;) {
+            int count = POSIX_API.read(descriptor, buffer, buffer.length);
+            if (count == 0) {
+                return result.toByteArray();
+            }
+            if (count < 0 && POSIX_API.errno() == Errno.EINTR.intValue()) {
+                continue;
+            }
+            result.write(buffer, 0, checked(count));
         }
     }
 

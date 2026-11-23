@@ -33,7 +33,13 @@ final class ProfileResolver {
             selection.entries(), selection.effectiveCount());
     }
 
+    record Reviewed(ProfileToml.Document document, PolicyProfile current, ObjectNode report) { }
+
     static ObjectNode diff(Path file) {
+        return review(file).report();
+    }
+
+    static Reviewed review(Path file) {
         var document = ProfileToml.document(file);
         var inputs = capture(file, document.profile(), false);
         String validationError = null;
@@ -42,8 +48,9 @@ final class ProfileResolver {
         } catch (InvalidPolicyDocumentException error) {
             validationError = error.getMessage();
         }
-        return ProfileDiff.report(document, inputs.profile(), inputs.members().stream().map(Member::entry).toList(),
+        var report = ProfileDiff.report(document, inputs.profile(), inputs.members().stream().map(Member::entry).toList(),
             validationError);
+        return new Reviewed(document, inputs.profile(), report);
     }
 
     private record Member(CapturedPack.Member source, ObjectNode entry) { }

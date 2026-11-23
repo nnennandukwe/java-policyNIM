@@ -1,0 +1,51 @@
+name: Install the pinned PolicyNIM reference
+description: Build and install the reference wheel with its locked runtime on the native runner.
+outputs:
+  python:
+    description: Workspace-relative path to the installed reference interpreter
+    value: ${{ steps.install.outputs.python }}
+runs:
+  using: composite
+  steps:
+    - name: Check out the Python reference
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      env:
+        # The wheel must contain the same source bytes as the pinned Git blobs on Windows.
+        GIT_CONFIG_COUNT: "1"
+        GIT_CONFIG_KEY_0: core.autocrlf
+        GIT_CONFIG_VALUE_0: "false"
+      with:
+        repository: nnennandukwe/policyNIM
+        ref: fcc5322a6672b0275dcc6e0c299e631df8e8de19
+        path: build/parity-python
+        persist-credentials: false
+    - name: Install uv
+      uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      with:
+        version: "0.13.6"
+        enable-cache: false
+    - name: Build and install the wheel
+      id: install
+      shell: bash
+      working-directory: build/parity-python
+      run: |
+        python=.venv/bin/python
+        if [[ "$RUNNER_OS" == Windows ]]; then
+          python=.venv/Scripts/python.exe
+        fi
+        uv sync --locked --no-default-groups --no-install-project --no-build --python 3.12.10
+        uv build --wheel --python "$python" --build-constraints ../../.github/actions/install-parity-reference/build-constraints.txt
+        wheel=dist/policynim-0.3.0-py3-none-any.whl
+        uv pip install --offline --no-deps --python "$python" "$wheel"
+        uv pip check --python "$python"
+        "$python" --version
+        git show -s --format='Reference commit %H, tree %T' HEAD
+        "$python" - uv.lock "$wheel" <<'PY'
+        import hashlib
+        import sys
+
+        for path in sys.argv[1:]:
+            with open(path, "rb") as artifact:
+                print(hashlib.file_digest(artifact, "sha256").hexdigest(), path)
+        PY
+        echo "python=build/parity-python/$python" >> "$GITHUB_OUTPUT"

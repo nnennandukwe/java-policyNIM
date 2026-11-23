@@ -19,16 +19,20 @@ final class InitialProfileToml {
             field(text, "version", pin.version());
             field(text, "digest", pin.digest());
             text.append("\n[packs.policies]\n");
-            pin.policies().forEach((id, digest) -> field(text, BARE_KEY.matcher(id).matches() ? id : quote(id), digest));
+            pin.policies().forEach((id, digest) -> field(text, key(id, true), digest));
         }
         return text.toString().replace("\n", System.lineSeparator());
     }
 
     private static void field(StringBuilder text, String key, String value) {
-        text.append(key).append(" = ").append(quote(value)).append('\n');
+        text.append(key).append(" = ").append(quote(value, true)).append('\n');
     }
 
-    private static String quote(String value) {
+    static String key(String value, boolean uppercaseEscapes) {
+        return BARE_KEY.matcher(value).matches() ? value : quote(value, uppercaseEscapes);
+    }
+
+    static String quote(String value, boolean uppercaseEscapes) {
         var result = new StringBuilder("\"");
         value.codePoints().forEach(ch -> {
             switch (ch) {
@@ -41,7 +45,7 @@ final class InitialProfileToml {
                 case '\r' -> result.append("\\r");
                 default -> {
                     if (ch < 32 || ch == 127) {
-                        result.append(String.format(Locale.ROOT, "\\u%04X", ch));
+                        result.append(String.format(Locale.ROOT, uppercaseEscapes ? "\\u%04X" : "\\u%04x", ch));
                     } else {
                         result.appendCodePoint(ch);
                     }

@@ -62,6 +62,11 @@ public final class SourceCatalog {
         return ProfileResolver.diff(file);
     }
 
+    /** Apply the reviewed profile pins and return the diff that the operator accepted. */
+    public static ObjectNode updateProfile(Path file, String expectedDigest) {
+        return ProfileUpdate.apply(file, expectedDigest);
+    }
+
     public static SourceCatalog read(Path selected) {
         try {
             SourceDirectory directory = SourceDirectory.open(selected);

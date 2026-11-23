@@ -1,0 +1,30 @@
+# non-English test data
+# Owner: release engineering. Café handoff.
+schema_version = 1
+profile_id = "review"
+
+[[packs]]
+path = "../team"
+pack_id = "review.team"
+version = "1.0.0"
+digest = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57"
+
+[packs.policies]
+C = "sha256:75d3d019e0dfcfc02abba9a4252ce69a1d17f5ba20bff167a9c0a3572154ae57"
+
+[[packs]]
+path = "../base"
+pack_id = "review.base"
+version = "1.0.0"
+digest   = "sha256:77bf1c1c3086114a3e8f85c8df56fb93d0f06a642151e307293b3532fe8b57b7"     # Reviewed base pack.
+
+[packs.policies]
+"A"	= "sha256:7a0cb6a4f1bdca64f7c9bf93f0744212595b14f520adb44db775ef3dca83e0c1"  # Approved A.
+B = "sha256:1c5b714c3ba0a9c3c1758907a31a74cc66a812ae8c4a3a3031e2975ed97a03ec"
+
+[[exclusions]]
+target_id = "C"
+expected_digest = "sha256:2df3cbbed9b4781c87f897a1d6bda20c2847389a85c72ba3aef205624f6bc9a9"
+reason = 'Review C at the next release.'  # Keep this decision.
+
+# Operator approval still references sha256:4b8fb34ea4bc5f88f2ad75fea032c81853f3c4566f7ee333d3bf7f8fa9b227d8

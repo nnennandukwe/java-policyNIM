@@ -81,6 +81,40 @@ class ProfileCommandTests {
     }
 
     @Test
+    void requiresAReviewTokenBeforeOpeningTheProfile(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("missing.toml");
+        assertThat(run("profile", "update", file.toString(), "--format=json")).isEqualTo(2);
+        assertThat(out.size()).isZero();
+        assertThat(err.toString(UTF_8)).contains("--expect-digest");
+        assertThat(dir.resolve(".missing.toml.lock")).doesNotExist();
+        err.reset();
+        assertThat(run("profile", "update", "--help")).isZero();
+        assertThat(out.toString(UTF_8)).contains("--expect-digest");
+        assertThat(err.size()).isZero();
+    }
+
+    @Test
+    void acceptsTheCurrentTokenAndReturnsTheReviewedReport(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("team profile.toml");
+        assertThat(run("profile", "init", file.toString())).isZero();
+        out.reset();
+        assertThat(run("profile", "diff", file.toString(), "--format=json")).isZero();
+        var reviewed = json.readTree(out.toByteArray());
+        String token = reviewed.required("review_digest").textValue();
+        out.reset();
+        assertThat(run("profile", "update", file.toString(), "--expect-digest", token, "--format=json")).isZero();
+        var updated = json.readTree(out.toByteArray());
+        assertThat(updated.size()).isEqualTo(3);
+        assertThat(updated.required("status").textValue()).isEqualTo("ok");
+        assertThat(updated.required("path").textValue()).isEqualTo(file.toString());
+        assertThat(updated.required("diff")).isEqualTo(reviewed);
+        out.reset();
+        assertThat(run("profile", "update", file.toString(), "--expect-digest=" + token)).isZero();
+        assertThat(out.toString(UTF_8)).contains(file.toString(), "index hasn't changed", "profile preview");
+        assertThat(err.size()).isZero();
+    }
+
+    @Test
     void initTextShowsTheDestinationWithNativeSeparators(@TempDir Path dir) {
         Path profile = dir.resolve("profiles").resolve("team.toml");
         assertThat(run("profile", "init", profile.toString())).isZero();

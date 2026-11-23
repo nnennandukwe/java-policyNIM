@@ -84,24 +84,33 @@ final class WindowsProfileStage extends ProfileStage {
 
     @Override
     void publish(String outputName) throws IOException {
+        rename(directory, outputName, false);
+    }
+
+    void replace(WindowsPackDirectory destination, String outputName) throws IOException {
+        rename(destination, outputName, true);
+    }
+
+    private void rename(WindowsPackDirectory destination, String outputName, boolean replace) throws IOException {
         WindowsProfileDirectory.requireLeaf(outputName);
         Pointer handle = stagedHandle();
-        byte[] information = renameInformation(handle.getRuntime().addressSize(), directory.rootHandle.address(), outputName);
+        byte[] information = renameInformation(handle.getRuntime().addressSize(), destination.rootHandle.address(), outputName, replace);
         int status = WindowsProfileDirectory.setInformation(handle, FILE_RENAME_INFORMATION, information);
         if (status == STATUS_OBJECT_NAME_COLLISION) {
             throw new FileAlreadyExistsException(outputName);
         }
-        WindowsProfileDirectory.check(status, "publish the new profile");
+        WindowsProfileDirectory.check(status, "publish the staged profile");
         staged = false;
     }
 
-    static byte[] renameInformation(int pointerSize, long targetDirectory, String name) {
-        // FILE_RENAME_INFORMATION has a zero replacement flag, aligned HANDLE, ULONG byte count and WCHAR array.
+    static byte[] renameInformation(int pointerSize, long targetDirectory, String name, boolean replace) {
+        // FILE_RENAME_INFORMATION has a replacement flag, aligned HANDLE, ULONG byte count and WCHAR array.
         int nameOffset = 2 * pointerSize + Integer.BYTES;
         int nameBytes = name.length() * Character.BYTES;
         // Windows requires sizeof(FILE_RENAME_INFORMATION), including trailing padding, plus the name bytes.
         int structSize = pointerSize == Long.BYTES ? 24 : 16;
         var info = ByteBuffer.allocate(structSize + nameBytes).order(ByteOrder.LITTLE_ENDIAN);
+        info.put(0, (byte) (replace ? 1 : 0));
         if (pointerSize == Long.BYTES) {
             info.putLong(pointerSize, targetDirectory);
         } else {
@@ -116,11 +125,14 @@ final class WindowsProfileStage extends ProfileStage {
     @Override
     void discard() throws IOException {
         if (staged) {
-            byte[] delete = {1};
-            int status = WindowsProfileDirectory.setInformation(stagedHandle(), FILE_DISPOSITION_INFORMATION, delete);
-            WindowsProfileDirectory.check(status, "discard the profile staging file");
+            deleteOnClose(stagedHandle());
             staged = false;
         }
+    }
+
+    static void deleteOnClose(Pointer handle) throws IOException {
+        int status = WindowsProfileDirectory.setInformation(handle, FILE_DISPOSITION_INFORMATION, new byte[]{1});
+        WindowsProfileDirectory.check(status, "discard the profile staging entry");
     }
 
     @Override
