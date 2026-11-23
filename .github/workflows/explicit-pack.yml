@@ -32,16 +32,6 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           persist-credentials: false
-      - name: Check out the pinned policy sources and generation archive
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          repository: nnennandukwe/policyNIM
-          ref: fcc5322a6672b0275dcc6e0c299e631df8e8de19
-          path: pinned-python
-          sparse-checkout: |
-            policies
-            artifacts/public-generation
-          persist-credentials: false
       - name: Set up Java
         uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5.0.0
         with:
@@ -49,10 +39,18 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Verify native pack access and profile publication
-        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests,PosixProfileDirectoryTests,WindowsProfilePathTests,WindowsProfileStageTests" test
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests,PosixProfileDirectoryTests,WindowsProfilePathTests,WindowsProfileStageTests,ProfilePinEditorTests,ProfileUpdateTests,PosixProfileUpdateTests,WindowsProfileUpdateTests" test
       - name: Package the installed jar
         run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
       - name: Verify source inspection and bundled assets in the installed jar
         run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dit.test=${{ matrix.source_tests }},PackagedExplicitPackIT,PackagedBundledAssetsIT,PackagedReadOnlyProfilesIT,PackagedProfileAuthoringIT" failsafe:integration-test failsafe:verify
+      - name: Install the pinned reference wheel and its locked runtime
+        id: reference
+        uses: ./.github/actions/install-parity-reference
+      - name: Compare native profile updates across the installed wheel and jar
+        shell: bash
+        env:
+          REFERENCE_PYTHON: ${{ steps.reference.outputs.python }}
+        run: '"$REFERENCE_PYTHON" -B src/test/parity/profile_update.py --jar target/policynim.jar --reference-root build/parity-python'
       - name: Compare the installed jar with all 26 archived policy records
-        run: ${{ matrix.python }} -I -S src/test/parity/archived_pack.py --jar target/policynim.jar --reference-root pinned-python
+        run: ${{ matrix.python }} -I -S src/test/parity/archived_pack.py --jar target/policynim.jar --reference-root build/parity-python

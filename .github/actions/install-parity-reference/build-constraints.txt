@@ -1,0 +1,5 @@
+# The reference pins Hatchling in pyproject.toml. Pin its Python 3.12 build dependencies here.
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+trove-classifiers==2026.9.21.13
