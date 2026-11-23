@@ -39,7 +39,8 @@ final class ProfilePinEditor {
             editor.stringValue(table, "path", pin.path());
             editor.stringValue(table, "version", pin.version());
             editor.stringValue(table, "digest", pin.digest());
-            editor.revisions(table, pin.policies());
+            boolean inlinePack = editor.text.charAt(editor.offset(packs.entry(index).value().position())) == '{';
+            editor.revisions(table, pin.policies(), inlinePack);
         }
         String updated = editor.apply();
         if (!ProfileToml.parse(updated).profile().equals(current)) {
@@ -53,7 +54,7 @@ final class ProfilePinEditor {
         replace(start, stringEnd(start), literal(value));
     }
 
-    private void revisions(TomlTable pack, Map<String, String> wanted) {
+    private void revisions(TomlTable pack, Map<String, String> wanted, boolean inlinePack) {
         int start = offset(pack.entry("policies").value().position());
         var policies = pack.getTable("policies");
         var rows = new ArrayList<Revision>();
@@ -73,6 +74,11 @@ final class ProfilePinEditor {
         if (dotted && rows.size() > 1) {
             // The pinned writer's TOML parser returns a table proxy for repeated dotted assignments.
             throw new InvalidPolicyDocumentException("Pack policy revisions must form a TOML table.");
+        }
+        if (dotted && inlinePack && !added.isEmpty()) {
+            // The reference can't render a change of membership inside this inline dotted table.
+            throw new InvalidPolicyDocumentException(
+                "Couldn't access profile inputs or output. Check paths, permissions, and UTF-8 files.");
         }
         blockRevisions(rows, wanted, added, dotted);
     }

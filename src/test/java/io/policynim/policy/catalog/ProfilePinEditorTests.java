@@ -61,6 +61,23 @@ class ProfilePinEditorTests {
     }
 
     @Test
+    void keepsOneDottedPinInsideAnInlinePackAndRefusesMembershipEdits() throws IOException {
+        String before = fixture("inline-before.toml");
+        String pin = parsed(before).profile().packs().getFirst().policies().get("C");
+        String explicit = "policies = { \"C\" = \"" + pin + "\" }";
+        String dotted = before.replace(explicit, "policies.C=\"" + pin + "\"");
+        var original = parsed(dotted);
+        assertThat(ProfilePinEditor.update(original, original.profile())).isEqualTo(dotted);
+        assertEdit(dotted, dotted.replace(pin, "sha256:" + "3".repeat(64)));
+        for (String policies : new String[] {"{ C=\"" + pin + "\", D=\"" + pin + "\" }", "{ D=\"" + pin + "\" }"}) {
+            var wanted = parsed(before.replace(explicit, "policies = " + policies)).profile();
+            assertThatThrownBy(() -> ProfilePinEditor.update(original, wanted))
+                .isInstanceOf(InvalidPolicyDocumentException.class)
+                .hasMessage("Couldn't access profile inputs or output. Check paths, permissions, and UTF-8 files.");
+        }
+    }
+
+    @Test
     void preservesAMultilineDecisionWithApparentAssignmentsAndAcceptsOneDottedPin() throws IOException {
         String before = fixture("selected-before.toml");
         String after = fixture("selected-after.toml");
