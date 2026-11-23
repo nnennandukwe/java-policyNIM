@@ -79,28 +79,32 @@ class WindowsProfileUpdateTests {
     }
 
     private static void checkPrivateStage(Path parent) throws Exception {
+        // Windows PowerShell exposes the .NET Framework ACL APIs without importing any PowerShell modules.
         String check = """
             $ErrorActionPreference = 'Stop'
-            $acl = Get-Acl -LiteralPath $env:POLICYNIM_TEST_STAGE
-            if (!$acl.AreAccessRulesProtected) { throw 'Stage inherited the parent ACL' }
-            $sid = [System.Security.Principal.SecurityIdentifier]
-            $rules = @($acl.GetAccessRules($true, $true, $sid))
-            $expected = @('S-1-5-18', 'S-1-5-32-544', 'S-1-3-4')
-            if (Compare-Object $expected @($rules | ForEach-Object { $_.IdentityReference.Value })) {
-                throw 'Unexpected principals on stage directory'
-            }
-            foreach ($rule in $rules) {
-                if ($rule.AccessControlType -ne 'Allow' -or $rule.FileSystemRights -ne 'FullControl' -or
-                    [int]$rule.InheritanceFlags -ne 3) { throw 'Incorrect stage rights or inheritance' }
-            }
-            $child = Get-ChildItem -LiteralPath $env:POLICYNIM_TEST_STAGE -Force
-            $inherited = @((Get-Acl -LiteralPath $child.FullName).GetAccessRules($false, $true, $sid))
-            if ($inherited.Count -eq 0) { throw 'Missing inherited staging file rights' }
-            foreach ($rule in $inherited) {
-                if ($rule.IdentityReference.Value -notin $expected -or $rule.AccessControlType -ne 'Allow') {
-                    throw 'Unexpected inherited principal or access type'
+            function Check-StageRules($security, $directory) {
+                $expected = @('S-1-5-18', 'S-1-5-32-544', 'S-1-3-4')
+                $seen = @{}
+                $rules = $security.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])
+                foreach ($rule in $rules) {
+                    $id = $rule.IdentityReference.Value
+                    if ($id -notin $expected -or $seen.ContainsKey($id)) { throw "Unexpected stage trustee $id" }
+                    $seen[$id] = $true
+                    if ($rule.AccessControlType -ne 'Allow' -or $rule.FileSystemRights -ne 'FullControl' -or
+                        $rule.PropagationFlags -ne 'None') { throw "Incorrect stage access for $id" }
+                    if ($directory -and [int]$rule.InheritanceFlags -ne 3) { throw "Missing stage inheritance for $id" }
+                    if (!$directory -and !$rule.IsInherited) { throw "Expected inherited staging file access for $id" }
                 }
+                if ($seen.Count -ne $expected.Count) { throw 'Missing stage trustees' }
             }
+            $stage = $env:POLICYNIM_TEST_STAGE
+            $access = [System.Security.AccessControl.AccessControlSections]::Access
+            $directoryAcl = [System.IO.Directory]::GetAccessControl($stage, $access)
+            if (!$directoryAcl.AreAccessRulesProtected) { throw 'Stage inherited the parent ACL' }
+            Check-StageRules $directoryAcl $true
+            $files = [System.IO.Directory]::GetFiles($stage)
+            if ($files.Length -ne 1) { throw 'Expected one staged profile' }
+            Check-StageRules ([System.IO.File]::GetAccessControl($files[0], $access)) $false
             """;
         var command = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", check)
             .redirectErrorStream(true);
