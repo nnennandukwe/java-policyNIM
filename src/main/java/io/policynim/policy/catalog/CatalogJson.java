@@ -35,6 +35,13 @@ final class CatalogJson {
         return contentDigest(compact(value));
     }
 
+    static String reviewDigest(String original, ObjectNode currentProfile) {
+        MessageDigest review = sha256();
+        review.update(original.getBytes(StandardCharsets.UTF_8));
+        review.update((byte) '\n');
+        return hex(review.digest(compact(currentProfile)));
+    }
+
     static ObjectNode entry(ParsedPolicyDocument doc, String path, ObjectNode provenance) {
         ObjectNode policy = metadata(doc.metadata(), provenance);
         MessageDigest target = sha256();

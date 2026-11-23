@@ -54,6 +54,14 @@ public final class SourceCatalog {
         return ProfileResolver.resolve(file);
     }
 
+    public static ObjectNode initializeProfile(Path file, List<String> packs, String profileId) {
+        return ProfileInitializer.initialize(file, packs, profileId).json();
+    }
+
+    public static ObjectNode diffProfile(Path file) {
+        return ProfileResolver.diff(file);
+    }
+
     public static SourceCatalog read(Path selected) {
         try {
             SourceDirectory directory = SourceDirectory.open(selected);

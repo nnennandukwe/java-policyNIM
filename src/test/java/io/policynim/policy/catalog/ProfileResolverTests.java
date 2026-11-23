@@ -2,6 +2,7 @@ package io.policynim.policy.catalog;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.policynim.policy.parse.InvalidPolicyDocumentException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -100,6 +101,104 @@ class ProfileResolverTests {
             reason = "Review the confirmed action."
             """);
         assertThat(ProfileResolver.resolve(file).validate().get("effective_count").intValue()).isEqualTo(2);
+    }
+
+    @Test
+    void diffHashesTheAuthoredTextAndTheCurrentModelSeparately() throws Exception {
+        installDecisionFixture();
+        Path file = temporary.resolve("team.toml");
+        String original = Files.readString(file);
+        String cleanDigest = "sha256:4887d9450ad8f944b7d4a91a38c854311021269e31d68510cde1765f1d21040a";
+        assertThat(ProfileResolver.diff(file).get("review_digest").asText()).isEqualTo(cleanDigest);
+        Files.writeString(file, original.replace("\n", "\r\n"));
+        assertThat(ProfileResolver.diff(file).get("review_digest").asText()).isEqualTo(cleanDigest);
+        Files.writeString(file, "# operator note\n" + original);
+        assertThat(ProfileResolver.diff(file).get("review_digest").asText())
+            .isEqualTo("sha256:4319684014355bf8a728d8e941ae148401d77a52874bfe44a9f2158de06cab8c");
+
+        String reordered = original.replaceFirst("(?m)^(A = [^\n]+)\n(B = [^\n]+)$", "$2\n$1");
+        Files.writeString(file, reordered);
+        assertThat(ProfileResolver.diff(file).get("review_digest").asText())
+            .isEqualTo("sha256:feb1ab8afc02c5b5032679f0ca9c9d38c12564eeb75943660e3b701d78c2c44e");
+        assertThat(Files.readString(file)).isEqualTo(reordered);
+    }
+
+    @Test
+    void diffRetainsAllActiveSourceEntriesWhenDecisionValidationFailsPartway() throws Exception {
+        var fixture = installDecisionFixture();
+        Path file = temporary.resolve("team.toml");
+        var report = ProfileResolver.diff(file);
+        assertThat(report.get("validation_error").isNull()).isTrue();
+        assertThat(report.get("changed_packs")).isEmpty();
+        var expectedEntries = fixture.at("/catalog/policies").deepCopy();
+        for (var entry : expectedEntries) {
+            ((ObjectNode) entry).put("state", "active")
+                .putNull("reason").putNull("replacement_id");
+        }
+        assertThat(report.get("current_policies")).isEqualTo(expectedEntries);
+
+        Path changed = temporary.resolve("base/A.md");
+        String source = Files.readString(changed);
+        Files.writeString(changed, source + "Updated requirement.\n");
+        var blocked = ProfileResolver.diff(file);
+        assertThat(blocked.get("validation_error").asText()).startsWith("Stale target digest for 'A'");
+        assertThat(blocked.get("changed").toString()).isEqualTo("[\"A\"]");
+        assertThat(blocked.get("changed_packs").toString()).isEqualTo("[\"review.base\"]");
+        assertThat(blocked.get("invalidated_decisions").toString()).isEqualTo("[\"A\"]");
+        // The preceding valid exclusion of B still leaves B active in the source report.
+        assertThat(blocked.at("/current_policies/1")).isEqualTo(expectedEntries.get(1));
+        assertThat(blocked.at("/current_policies/0/body").asText()).contains("Updated requirement.");
+        Files.writeString(changed, source);
+        assertThat(ProfileResolver.diff(file)).isEqualTo(report);
+    }
+
+    @Test
+    void diffReturnsDuplicateSourceEntriesInPackOrderAndRefusesChangedPackIdentity() throws Exception {
+        installDecisionFixture();
+        Path file = temporary.resolve("team.toml");
+        Path manifest = temporary.resolve("team/pack.toml");
+        String original = Files.readString(manifest);
+        Files.copy(temporary.resolve("base/B.md"), temporary.resolve("team/B.md"));
+        Files.writeString(manifest, original + "[[policies]]\npolicy_id = \"B\"\npath = \"B.md\"\n");
+        var report = ProfileResolver.diff(file);
+        assertThat(report.get("validation_error").asText()).isEqualTo("Duplicate effective policy IDs across selected packs.");
+        assertThat(report.get("current_policies").findValuesAsText("path"))
+            .containsExactly("review.base/A.md", "review.base/B.md", "review.team/B.md", "review.base/C.md", "review.team/D.md");
+        assertThat(report.get("added").toString()).isEqualTo("[\"B\"]");
+        assertThat(report.get("invalidated_decisions").toString()).isEqualTo("[\"B\"]");
+
+        Files.writeString(manifest, original.replace("review.team", "other.team"));
+        Files.delete(temporary.resolve("team/B.md"));
+        assertThatThrownBy(() -> ProfileResolver.diff(file)).isInstanceOf(InvalidPolicyDocumentException.class)
+            .hasMessage("Selected pack_id changed; review the profile selection.");
+        Files.writeString(manifest, original);
+        assertThat(ProfileResolver.diff(file).get("validation_error").isNull()).isTrue();
+    }
+
+    @Test
+    void diffTracksRevisionsByPackAndPolicyWhenAPolicyMovesAndVersionChanges() throws Exception {
+        installDecisionFixture();
+        Path profile = temporary.resolve("team.toml");
+        Path baseManifest = temporary.resolve("base/pack.toml");
+        Path teamManifest = temporary.resolve("team/pack.toml");
+        String base = Files.readString(baseManifest);
+        String team = Files.readString(teamManifest);
+        Files.writeString(baseManifest, base.replace("1.0.0", "1.0.1"));
+        var changedVersion = ProfileResolver.diff(profile);
+        assertThat(changedVersion.get("changed").toString()).isEqualTo("[\"A\",\"B\",\"C\"]");
+        assertThat(changedVersion.get("changed_packs").toString()).isEqualTo("[\"review.base\"]");
+        assertThat(changedVersion.get("invalidated_decisions").toString()).isEqualTo("[\"A\",\"B\"]");
+
+        String member = "[[policies]]\npolicy_id = \"C\"\npath = \"C.md\"\n";
+        Files.move(temporary.resolve("base/C.md"), temporary.resolve("team/C.md"));
+        Files.writeString(baseManifest, base.replace(member, ""));
+        Files.writeString(teamManifest, team + member);
+        var moved = ProfileResolver.diff(profile);
+        assertThat(moved.get("added").toString()).isEqualTo("[\"C\"]");
+        assertThat(moved.get("removed").toString()).isEqualTo("[\"C\"]");
+        assertThat(moved.get("changed")).isEmpty();
+        assertThat(moved.get("changed_packs").toString()).isEqualTo("[\"review.base\",\"review.team\"]");
+        assertThat(moved.get("validation_error").isNull()).isTrue();
     }
 
     private JsonNode installDecisionFixture() throws Exception {

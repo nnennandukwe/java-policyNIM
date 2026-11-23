@@ -48,11 +48,11 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Verify pack file access on the host
-        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests" test
+      - name: Verify native pack access and profile publication
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dtest=PackDirectoryTests,ProfileCommandTests,ProfileInitializerTests,ProfilePublicationTests,PosixProfileDirectoryTests,WindowsProfilePathTests,WindowsProfileStageTests" test
       - name: Package the installed jar
         run: ${{ matrix.wrapper }} -B --no-transfer-progress -DskipTests package
       - name: Verify source inspection and bundled assets in the installed jar
-        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dit.test=${{ matrix.source_tests }},PackagedExplicitPackIT,PackagedBundledAssetsIT,PackagedReadOnlyProfilesIT" failsafe:integration-test failsafe:verify
+        run: ${{ matrix.wrapper }} -B --no-transfer-progress "-Dit.test=${{ matrix.source_tests }},PackagedExplicitPackIT,PackagedBundledAssetsIT,PackagedReadOnlyProfilesIT,PackagedProfileAuthoringIT" failsafe:integration-test failsafe:verify
       - name: Compare the installed jar with all 26 archived policy records
         run: ${{ matrix.python }} -I -S src/test/parity/archived_pack.py --jar target/policynim.jar --reference-root pinned-python

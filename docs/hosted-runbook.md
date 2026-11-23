@@ -154,6 +154,24 @@ requirement_level = "recommended"
 
 If a file can't be read or two entries declare the same ID, fix the reported source and rerun `validate`. JSON mode returns one error object on stdout and exit 1 for an invalid source. Command usage errors go to stderr with exit 2. A file alias must resolve within the selected root. Inspect an operator-controlled directory while its contents are stable. The command reports a detected change during capture.
 
+## Create and compare policy profiles
+
+Create a profile when you want to pin the policy revisions used by a team. With no pack arguments, the jar pins its shipped 26-policy baseline and writes `builtin:baseline` to the profile. To select your own packs, pass each manifest directory with `--pack` in the order you want to review them. The jar resolves these arguments from your working directory and records their locations relative to the profile where the filesystem permits it.
+
+```bash
+java -jar /app/policynim.jar profile init /work/team.toml --id team --pack /work/security --pack /work/operations
+java -jar /app/policynim.jar profile preview /work/team.toml
+java -jar /app/policynim.jar profile diff /work/team.toml --format json
+```
+
+Init creates the profile at a new path. If the destination already exists, inspect it or choose another path. On Linux and macOS the destination filesystem must support hard links. On Windows the writer needs permission to rename the staged file. If init reports that the profile was created before cleanup failed or its directory moved, inspect that directory for the completed profile before retrying.
+
+On Linux and macOS, init creates the profile with owner-only access. To use it from the container, create it as the service user in a writable mounted directory or grant the intended reader access to the profile and its parent directories. The service user also needs read access to each selected pack.
+
+Diff reads the profile and its current sources. It lists added, changed and removed policy revisions, packs with changed pins and decisions that need another review. `current_policies` contains the current authored text and target digests before decisions are applied. If `validation_error` contains a message, use it to repair the profile or sources and rerun diff. A changed pack ID or an unreadable profile prevents a comparison and returns exit 1.
+
+The review digest binds the original profile text to the proposed pins. A changed comment can change the digest even when the policies stay the same. To adopt a reviewed change with the Python CLI, use `policynim profile update /work/team.toml --expect-digest <review_digest>`. Rerun preview to inspect the result. [Profile initialization and diff Build Plan](build-plans/profile-init-diff.md)
+
 ## Inspect a policy profile
 
 A profile is a TOML file that names policy packs, pins their revisions and records why a policy was excluded or replaced. `preview` shows every authored policy, including inactive entries and the recorded reason. `validate` checks the pins and the profile's decisions. Run these commands with the path to a local profile.

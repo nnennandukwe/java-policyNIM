@@ -6,6 +6,7 @@ import io.policynim.policy.parse.SourceMarkdownParser.RuntimeRule;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -20,52 +21,84 @@ final class ProfileResolver {
     private ProfileResolver() { }
 
     static SourceCatalog resolve(Path file) {
-        var profile = ProfileToml.read(file);
-        var packs = verifiedPacks(profile, file);
-        var members = new LinkedHashMap<String, CapturedPack.Member>();
-        var entries = new LinkedHashMap<String, ObjectNode>();
-        for (var pack : packs) {
-            for (var member : pack.members()) {
-                if (members.putIfAbsent(member.policyId(), member) != null) {
-                    throw new InvalidPolicyDocumentException("Duplicate effective policy IDs across selected packs.");
-                }
-                var entry = member.standaloneEntry();
-                entry.put("path", pack.packId() + "/" + member.relativePath());
-                entries.put(member.policyId(), entry);
-            }
-        }
-        Set<String> targets = applyDecisions(profile, entries);
-        checkRuntimeRules(members, targets);
-        var pins = profile.packs().stream().map(PolicyProfile.Pin::publicFields).toList();
-        return SourceCatalog.profiled(profile.profileId(), CatalogJson.jsonDigest(profile.json()), pins,
-            List.copyOf(entries.values()), entries.size() - targets.size());
+        return resolve(file, ProfileToml.read(file));
     }
 
-    private static List<CapturedPack> verifiedPacks(PolicyProfile profile, Path file) {
-        var packs = new ArrayList<CapturedPack>();
+    static SourceCatalog resolve(Path file, PolicyProfile profile) {
+        var inputs = capture(file, profile, true);
+        var selection = compose(inputs);
+        var current = inputs.profile();
+        var pins = current.packs().stream().map(PolicyProfile.Pin::publicFields).toList();
+        return SourceCatalog.profiled(current.profileId(), CatalogJson.jsonDigest(current.json()), pins,
+            selection.entries(), selection.effectiveCount());
+    }
+
+    static ObjectNode diff(Path file) {
+        var document = ProfileToml.document(file);
+        var inputs = capture(file, document.profile(), false);
+        String validationError = null;
+        try {
+            compose(inputs);
+        } catch (InvalidPolicyDocumentException error) {
+            validationError = error.getMessage();
+        }
+        return ProfileDiff.report(document, inputs.profile(), inputs.members().stream().map(Member::entry).toList(),
+            validationError);
+    }
+
+    private record Member(CapturedPack.Member source, ObjectNode entry) { }
+    private record Inputs(PolicyProfile profile, List<Member> members) { }
+    private record Selection(List<ObjectNode> entries, int effectiveCount) { }
+
+    private static Inputs capture(Path file, PolicyProfile profile, boolean enforcePins) {
+        var pins = new ArrayList<PolicyProfile.Pin>();
+        var members = new ArrayList<Member>();
         var locations = new HashSet<PackLocation>();
-        for (var pin : profile.packs()) {
-            var location = PackLocation.resolve(file, pin.path());
+        for (var expected : profile.packs()) {
+            var location = PackLocation.resolve(file, expected.path());
             if (!locations.add(location)) {
                 throw new InvalidPolicyDocumentException("A local pack directory was selected more than once.");
             }
             var pack = SourceCatalog.capturePack(location);
-            if (!pin.packId().equals(pack.packId())) {
+            if (!expected.packId().equals(pack.packId())) {
                 throw new InvalidPolicyDocumentException("Selected pack_id changed; review the profile selection.");
             }
-            if (!pin.version().equals(pack.version()) || !pin.digest().equals(pack.digest())
-                    || !matchesRevisions(pin, pack)) {
-                throw new InvalidPolicyDocumentException("Pack " + pin.packId() + " doesn't match its pin. "
-                    + "Review the selected pack and the pins in the profile TOML.");
+            var current = pin(expected.path(), pack);
+            if (enforcePins && !current.equals(expected)) {
+                throw new InvalidPolicyDocumentException("Pack " + expected.packId() + " doesn't match its pin. "
+                    + "Run profile diff on the selected profile and review its current source pins.");
             }
-            packs.add(pack);
+            pins.add(current);
+            for (var source : pack.members()) {
+                var entry = source.standaloneEntry();
+                entry.put("path", pack.packId() + "/" + source.relativePath());
+                members.add(new Member(source, entry));
+            }
         }
-        return packs;
+        var current = new PolicyProfile(profile.profileId(), pins, profile.exclusions(), profile.replacements(),
+            profile.conflicts());
+        return new Inputs(current, members);
     }
 
-    private static boolean matchesRevisions(PolicyProfile.Pin pin, CapturedPack pack) {
-        return pin.policies().size() == pack.members().size() && pack.members().stream()
-            .allMatch(member -> member.revisionDigest().equals(pin.policies().get(member.policyId())));
+    static PolicyProfile.Pin pin(String path, CapturedPack pack) {
+        var revisions = new LinkedHashMap<String, String>();
+        for (var member : pack.members()) {
+            revisions.put(member.policyId(), member.revisionDigest());
+        }
+        return new PolicyProfile.Pin(path, pack.packId(), pack.version(), pack.digest(),
+            Collections.unmodifiableMap(revisions));
+    }
+
+    private static Selection compose(Inputs inputs) {
+        var entries = new LinkedHashMap<String, ObjectNode>();
+        for (var member : inputs.members()) {
+            if (entries.putIfAbsent(member.source().policyId(), member.entry()) != null) {
+                throw new InvalidPolicyDocumentException("Duplicate effective policy IDs across selected packs.");
+            }
+        }
+        Set<String> targets = applyDecisions(inputs.profile(), entries);
+        checkRuntimeRules(inputs.members(), targets);
+        return new Selection(List.copyOf(entries.values()), entries.size() - targets.size());
     }
 
     private static Set<String> applyDecisions(PolicyProfile profile, Map<String, ObjectNode> entries) {
@@ -96,8 +129,9 @@ final class ProfileResolver {
             if (decision.replacementId() != null && !entries.containsKey(decision.replacementId())) {
                 throw new InvalidPolicyDocumentException("Unknown replacement ID; select its pack first.");
             }
-            target.put("state", decision.replacementId() == null ? "excluded" : "replaced")
+            var decided = target.deepCopy().put("state", decision.replacementId() == null ? "excluded" : "replaced")
                 .put("reason", decision.reason()).put("replacement_id", decision.replacementId());
+            entries.put(decision.targetId(), decided);
         }
         if (entries.size() == targets.size()) {
             throw new InvalidPolicyDocumentException("The profile must retain at least one effective policy.");
@@ -122,9 +156,10 @@ final class ProfileResolver {
         }
     }
 
-    private static void checkRuntimeRules(Map<String, CapturedPack.Member> members, Set<String> inactive) {
+    private static void checkRuntimeRules(List<Member> members, Set<String> inactive) {
         var effects = new HashMap<Matcher, String>();
-        for (var member : members.values()) {
+        for (var selected : members) {
+            var member = selected.source();
             if (inactive.contains(member.policyId())) {
                 continue;
             }

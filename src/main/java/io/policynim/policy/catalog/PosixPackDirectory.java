@@ -31,7 +31,7 @@ final class PosixPackDirectory extends PackDirectory {
         int openat(int parent, @In byte[] component, int flags);
     }
 
-    private static final POSIX POSIX_API = POSIXFactory.getNativePOSIX();
+    static final POSIX POSIX_API = POSIXFactory.getNativePOSIX();
     private static final DirectoryCalls CALLS = LibraryLoader.create(DirectoryCalls.class)
         .load(Platform.getNativePlatform().getStandardCLibraryName());
     private static final int DIRECTORY = flags(OpenFlags.O_DIRECTORY);
@@ -41,17 +41,39 @@ final class PosixPackDirectory extends PackDirectory {
     private final FileStat rootStat;
 
     PosixPackDirectory(Path root) throws IOException {
+        this(root, checked(CALLS.open(terminated(octets(rawPath(root))), DIRECTORY)));
+    }
+
+    static PosixPackDirectory openFileSystemRoot(int flags) throws IOException {
+        return new PosixPackDirectory(Path.of("/"), checked(CALLS.open(new byte[] {'/', 0}, flags)));
+    }
+
+    static byte[] nativeFileName(Path path) {
+        String raw = rawPath(path);
+        return terminated(octets(raw.substring(raw.lastIndexOf('/') + 1)));
+    }
+
+    /** Takes ownership of an already open directory descriptor, including on validation failure. */
+    PosixPackDirectory(Path root, int descriptor) throws IOException {
         super(root);
-        rawRoot = rawPath(root);
-        rootStat = POSIX_API.allocateStat();
-        rootFd = checked(CALLS.open(terminated(octets(rawRoot)), DIRECTORY));
+        rootFd = descriptor;
         try {
+            rawRoot = rawPath(root);
+            rootStat = POSIX_API.allocateStat();
             checked(POSIX_API.fstat(rootFd, rootStat));
             verifyRoot();
         } catch (IOException | RuntimeException | Error failure) {
-            checked(POSIX_API.close(rootFd));
+            try {
+                checked(POSIX_API.close(rootFd));
+            } catch (IOException | RuntimeException | Error closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
             throw failure;
         }
+    }
+
+    int descriptor() {
+        return rootFd;
     }
 
     @Override
