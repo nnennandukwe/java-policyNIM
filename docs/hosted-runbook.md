@@ -170,7 +170,14 @@ On Linux and macOS, init creates the profile with owner-only access. To use it f
 
 Diff reads the profile and its current sources. It lists added, changed and removed policy revisions, packs with changed pins and decisions that need another review. `current_policies` contains the current authored text and target digests before decisions are applied. If `validation_error` contains a message, use it to repair the profile or sources and rerun diff. A changed pack ID or an unreadable profile prevents a comparison and returns exit 1.
 
-The review digest binds the original profile text to the proposed pins. A changed comment can change the digest even when the policies stay the same. To adopt a reviewed change with the Python CLI, use `policynim profile update /work/team.toml --expect-digest <review_digest>`. Rerun preview to inspect the result. [Profile initialization and diff Build Plan](build-plans/profile-init-diff.md)
+The review digest binds the original profile text to the proposed pins. A changed comment can change the digest even when the policies stay the same. After you review the diff, copy its `review_digest` into the update command. The Java jar and Python CLI accept each other’s tokens for the same file and source revisions.
+
+```sh
+java -jar /app/policynim.jar profile update /work/team.toml --expect-digest "$REVIEW_DIGEST"
+java -jar /app/policynim.jar profile preview /work/team.toml
+```
+
+Update changes the pins in the profile and leaves the index in place. It takes a lock beside the profile, verifies the digest, and rechecks the profile and its sources before replacing the file. Leave the sibling lock file in place for other writers. If the token is stale or a decision blocks the update, review a fresh diff and correct the inputs before retrying. A successful update can include a warning when directory sync or staging cleanup fails. Reread the profile to see which pins are in place before retrying. [Reviewed update Build Plan](build-plans/profile-reviewed-update.md)
 
 ## Inspect a policy profile
 

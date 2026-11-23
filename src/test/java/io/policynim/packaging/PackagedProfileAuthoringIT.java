@@ -135,6 +135,49 @@ class PackagedProfileAuthoringIT {
         }
     }
 
+    @Test
+    void oneWriterAdoptsReviewedPinsAndTheOtherMustReviewAgain() throws Exception {
+        String name = fixture.required("profileDestination").textValue();
+        Path profile = work.resolve(name);
+        Files.createDirectories(profile.getParent());
+        Files.writeString(profile, updateFixture("normal-before"));
+        for (var file : fixture.required("edit").properties()) {
+            Files.writeString(work.resolve(file.getKey()), file.getValue().textValue(), UTF_8);
+        }
+        JsonNode reviewed;
+        try (var diff = start("diff", name)) {
+            reviewed = diff.finish().success();
+        }
+        String token = reviewed.required("review_digest").textValue();
+        assertEquals("sha256:27e2e250673b89f265136277ffde5ac38bb2afbd24979d9664b0713eb218eb11", token);
+        try (var first = start("update", name, "--expect-digest", token);
+             var second = start("update", name, "--expect-digest=" + token)) {
+            Result left = first.finish();
+            Result right = second.finish();
+            assertEquals(List.of(0, 1), List.of(left.exit(), right.exit()).stream().sorted().toList());
+            var committed = left.exit() == 0 ? left : right;
+            assertEquals(reviewed, committed.success().required("diff"));
+            var refused = left.exit() == 0 ? right : left;
+            assertTrue(refused.json().required("message").asText().contains("Review digest changed"));
+        }
+        assertEquals(updateFixture("normal-after").replace("\n", System.lineSeparator()), Files.readString(profile));
+        try (var preview = start("preview", name); var diff = start("diff", name)) {
+            assertEquals(3, preview.finish().success().required("effective_count").intValue());
+            assertTrue(diff.finish().success().required("changed_packs").isEmpty());
+        }
+        try (var entries = Files.list(profile.getParent())) {
+            assertEquals(List.of(".team.toml.lock", "team.toml"),
+                entries.map(path -> path.getFileName().toString()).sorted().toList());
+        }
+    }
+
+    private static String updateFixture(String name) throws Exception {
+        try (var contents = Objects.requireNonNull(PackagedProfileAuthoringIT.class
+            .getResourceAsStream("/parity/catalog/profile-update/" + name + ".toml"))) {
+            return new String(contents.readAllBytes(), UTF_8);
+        }
+    }
+
     private static void assertRefusal(Result result) {
         assertEquals(1, result.exit());
         assertEquals(2, result.json().size());

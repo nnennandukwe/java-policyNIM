@@ -20,6 +20,7 @@ public final class ProfileCommand {
         Usage: java -jar <jar> profile <command> <path> [--format text|json]
           init       Create new pins. Use --id NAME and repeat --pack DIR to select local packs.
           diff       Compare current sources with the pins and print a review digest.
+          update     Apply the reviewed source pins. Pass --expect-digest TOKEN from diff.
           preview    Show each authored policy, its state and the reason for a decision.
           validate   Check pack pins, policy IDs, decisions and declared conflicts.
         """;
@@ -48,6 +49,7 @@ public final class ProfileCommand {
             switch (options.command()) {
                 case "init" -> initialize(options, output);
                 case "diff" -> diff(options, output);
+                case "update" -> update(options, output);
                 case "preview" -> preview(SourceCatalog.readProfile(options.path()), options.json(), output);
                 case "validate" -> validate(SourceCatalog.readProfile(options.path()), options.json(), output);
                 default -> throw new IllegalStateException("Unrecognized profile operation");
@@ -104,11 +106,28 @@ public final class ProfileCommand {
         output.println("Review digest: " + token);
         JsonNode invalid = report.required("validation_error");
         if (invalid.isNull()) {
-            output.println("To apply reviewed pins, use the Python CLI's profile update command with --expect-digest " + token);
+            output.println("To apply these pins, run profile update with the same jar and path, passing --expect-digest " + token);
         } else {
             output.println("Update blocked: " + singleLine(invalid.textValue()));
             output.println("Review current_policies with --format json for new text and target digests.");
         }
+    }
+
+    private static void update(Options options, PrintStream output) {
+        var report = SourceCatalog.updateProfile(options.path(), options.expectedDigest());
+        String displayed = displayPath(options.path());
+        if (options.json()) {
+            var result = JsonNodeFactory.instance.objectNode().put("status", "ok").put("path", displayed);
+            result.set("diff", report);
+            output.println(result.toPrettyString());
+            return;
+        }
+        String name = SourceCatalogCommand.pathForDisplay(displayed, File.separatorChar != '\\');
+        output.println("Updated source pins: " + name + ". The index hasn't changed.");
+        for (JsonNode warning : report.required("warnings")) {
+            output.println("Warning: " + singleLine(warning.textValue()));
+        }
+        output.println("To inspect the new pins, run profile preview with the same jar and path.");
     }
 
     private static String singleLine(String value) {
@@ -144,9 +163,10 @@ public final class ProfileCommand {
         }
     }
 
-    private record Options(String command, Path path, List<String> packs, String profileId, boolean json, boolean help) {
+    private record Options(String command, Path path, List<String> packs, String profileId, String expectedDigest,
+                           boolean json, boolean help) {
         private static Options help(String command) {
-            return new Options(command, null, List.of(), "local", false, true);
+            return new Options(command, null, List.of(), "local", null, false, true);
         }
 
         static Options parse(String[] args) {
@@ -157,11 +177,12 @@ public final class ProfileCommand {
             if (command.equals("--help") && args.length == 2) {
                 return help(command);
             }
-            if (!Set.of("init", "preview", "validate", "diff").contains(command)) {
-                throw new IllegalArgumentException("Choose init, preview, validate or diff.");
+            if (!Set.of("init", "preview", "validate", "diff", "update").contains(command)) {
+                throw new IllegalArgumentException("Choose init, preview, validate, diff or update.");
             }
             var packs = new ArrayList<String>();
             String profileId = "local";
+            String expectedDigest = null;
             String format = "text";
             Path path = null;
             boolean positional = false;
@@ -175,7 +196,8 @@ public final class ProfileCommand {
                     int equals = arg.indexOf('=');
                     String key = equals < 0 ? arg : arg.substring(0, equals);
                     boolean initOption = command.equals("init") && (key.equals("--id") || key.equals("--pack"));
-                    if (!key.equals("--format") && !initOption) {
+                    boolean updateOption = command.equals("update") && key.equals("--expect-digest");
+                    if (!key.equals("--format") && !initOption && !updateOption) {
                         throw new IllegalArgumentException("Unknown profile option.");
                     }
                     if (equals < 0 && i + 1 >= args.length) {
@@ -185,6 +207,7 @@ public final class ProfileCommand {
                     switch (key) {
                         case "--pack" -> packs.add(value);
                         case "--id" -> profileId = value;
+                        case "--expect-digest" -> expectedDigest = value;
                         default -> {
                             if (!value.equals("text") && !value.equals("json")) {
                                 throw new IllegalArgumentException("Choose --format text or --format json.");
@@ -206,7 +229,10 @@ public final class ProfileCommand {
             if (path == null) {
                 throw new IllegalArgumentException("Provide a local profile path.");
             }
-            return new Options(command, path, List.copyOf(packs), profileId, format.equals("json"), false);
+            if (command.equals("update") && expectedDigest == null) {
+                throw new IllegalArgumentException("Provide --expect-digest with the review digest from profile diff.");
+            }
+            return new Options(command, path, List.copyOf(packs), profileId, expectedDigest, format.equals("json"), false);
         }
     }
 }

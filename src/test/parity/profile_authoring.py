@@ -84,7 +84,7 @@ def check_diff(cli, name, *, text=False, **changes):
             require("Update blocked: " + expected["validation_error"] in lines and "--format json" in lines[-1],
                     f"Missing blocking reason or review action: {lines}")
         else:
-            cli_name = "policynim" if cli.product == "python" else "Python"
+            cli_name = "policynim" if cli.product == "python" else "same jar"
             require(cli_name in lines[-1] and "profile update" in lines[-1]
                     and "--expect-digest " + expected["review_digest"] in lines[-1],
                     f"Missing review token in follow-up: {lines}")
@@ -310,10 +310,29 @@ def check_image(image, workspace, fixture, readers, baseline):
     require(binary == default_text.encode() and digest(binary) == BUILTIN_FILE, "Image aggregate bytes changed")
     match(command(["diff", default_name]), report(default_text, model(default_text), baseline[1]["policies"]),
           "Image aggregate review")
+    write_fixture(inputs, fixture["edit"])
+    reviewed = command(["diff", name])
+    match(summary(reviewed), fixture["editExpected"], "Image dirty review")
+    command(["update", name, "--expect-digest", fixture["clean"]["review_digest"]], error="Review digest changed")
+    match(command(["update", name, "--expect-digest", reviewed["review_digest"]]),
+          {"status": "ok", "path": name, "diff": reviewed}, "Image reviewed update")
+    published = subprocess.check_output([*run, "--entrypoint", "cat", image_id, name], timeout=30)
+    expected_profile = "sha256:f275017de668025621f125ed85592e3c17535ff0855e51584328ec9dc357dde7"
+    match(digest(published), expected_profile, "Image updated bytes from the pinned profile fixture")
+    inspect = workspace / "updated-image-review" / "work"
+    write_fixture(inspect, fixture["files"] | fixture["edit"])
+    inspected_profile = inspect / name
+    inspected_profile.parent.mkdir()
+    inspected_profile.write_bytes(published)
+    clean_report = local_report(inspected_profile)
+    for reader in readers:
+        match(invoke(replace(reader, cwd=inspect), ["profile", "diff", name]), clean_report, "Read image update")
+    match(command(["diff", name]), clean_report, "Fresh image read")
     checksum = subprocess.check_output([*run, "--entrypoint", "sha256sum", image_id, "/app/policynim.jar"],
                                        cwd=workspace, text=True, timeout=30).split()[0]
     require(len(checksum) == 64 and all(c in "0123456789abcdef" for c in checksum), "Missing image jar checksum")
-    return {"imageId": image_id, "imageJarSha256": checksum}
+    return {"imageId": image_id, "imageJarSha256": checksum, "imageReviewedToken": reviewed["review_digest"],
+            "imageUpdatedProfileSha256": expected_profile, "imageCleanToken": clean_report["review_digest"]}
 
 
 def main():

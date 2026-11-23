@@ -12,7 +12,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +67,7 @@ class PackagedJdbcSearchIT {
                 PackagedMcpHttp.reap(ingest);
             }
 
+            verifyUpdatingTheSourcePinsPreservesStoredRows(directory, corpus, database);
             Path readerDirectory = Files.createDirectory(directory.resolve("reader"));
             String token = UUID.randomUUID().toString();
             var server = PackagedMcpHttp.startServer(readerDirectory, database, token);
@@ -83,6 +86,65 @@ class PackagedJdbcSearchIT {
             }
             verifyGroundedReaders(readerDirectory, database, token);
             verifyGroundedStdioReaders(readerDirectory, database);
+        }
+    }
+
+    private static void verifyUpdatingTheSourcePinsPreservesStoredRows(Path directory, Path corpus,
+                                                                      Map<String, String> database) throws Exception {
+        List<String> originalRows = indexedRows(database);
+        assertFalse(originalRows.isEmpty());
+        Files.writeString(corpus.resolve("pack.toml"), """
+            schema_version = 1
+            pack_id = "recovery"
+            version = "1.0.0"
+            [[policies]]
+            policy_id = "OPS-RECOVERY-001"
+            path = "recovery.md"
+            """);
+        String profile = "review.toml";
+        var created = profileCommand(directory, database, "init", profile, "--pack", corpus.toString());
+        Files.writeString(corpus.resolve("recovery.md"), "Read the operator's recovery log.\n",
+            java.nio.file.StandardOpenOption.APPEND);
+        var diff = profileCommand(directory, database, "diff", profile);
+        assertEquals(1, diff.required("changed").size());
+        assertEquals("OPS-RECOVERY-001", diff.at("/changed/0").textValue());
+        var result = profileCommand(directory, database, "update", profile, "--expect-digest",
+            diff.required("review_digest").textValue());
+        assertEquals(diff, result.required("diff"));
+        var current = profileCommand(directory, database, "diff", profile);
+        assertTrue(current.required("changed").isEmpty());
+        assertTrue(current.at("/current_policies/0/body").asText().contains("Read the operator's recovery log."));
+        String oldRevision = created.required("profile").required("packs").get(0).required("policies")
+            .required("OPS-RECOVERY-001").textValue();
+        assertFalse(Files.readString(directory.resolve(profile)).contains(oldRevision));
+        assertEquals(originalRows, indexedRows(database));
+    }
+
+    private static JsonNode profileCommand(Path directory, Map<String, String> database, String... args) throws Exception {
+        var launch = PackagedMcpHttp.jarCommand(directory, database, "profile");
+        launch.command().addAll(List.of(args));
+        launch.command().add("--format=json");
+        Path output = Files.createTempFile(directory, "profile-command-", ".json");
+        var child = launch.redirectOutput(output.toFile()).start();
+        try {
+            assertTrue(child.waitFor(30, TimeUnit.SECONDS), "The packaged profile command timed out.");
+            assertEquals(0, child.exitValue(), () -> "Profile command failed: " + args[0]);
+            return new ObjectMapper().readTree(output.toFile());
+        } finally {
+            PackagedMcpHttp.reap(child);
+        }
+    }
+
+    private static List<String> indexedRows(Map<String, String> database) throws Exception {
+        try (var connection = DriverManager.getConnection(database.get("SPRING_DATASOURCE_URL"),
+                 database.get("SPRING_DATASOURCE_USERNAME"), database.get("SPRING_DATASOURCE_PASSWORD"));
+             var query = connection.createStatement();
+             var rows = query.executeQuery("SELECT to_jsonb(c)::text FROM policy_chunks c ORDER BY chunk_id")) {
+            var result = new ArrayList<String>();
+            while (rows.next()) {
+                result.add(rows.getString(1));
+            }
+            return result;
         }
     }
 
