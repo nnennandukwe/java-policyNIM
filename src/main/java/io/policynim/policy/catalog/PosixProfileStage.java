@@ -26,6 +26,7 @@ final class PosixProfileStage extends ProfileStage {
     private final PosixPackDirectory parent;
     private final byte[] stageName = name(".policynim-profile-" + UUID.randomUUID() + ".tmp");
     private boolean directoryCreated;
+    private boolean bodyMoved;
     private int directory = -1;
     private int file = -1;
 
@@ -81,6 +82,15 @@ final class PosixProfileStage extends ProfileStage {
         require(result);
     }
 
+    void preserveMode(int mode) throws IOException {
+        require(POSIX_API.fchmod(file, mode));
+    }
+
+    void replace(byte[] outputName) throws IOException {
+        require(NATIVE.renameat(directory, BODY, parent.descriptor(), outputName));
+        bodyMoved = true;
+    }
+
     @Override
     void discard() throws IOException {
         if (!directoryCreated) {
@@ -90,7 +100,7 @@ final class PosixProfileStage extends ProfileStage {
             throw new IOException("Couldn't verify the profile staging directory. Inspect the output directory before retrying.");
         }
         verifyPrivateDirectory();
-        if (file >= 0) {
+        if (file >= 0 && !bodyMoved) {
             verifyNamedFile(directory, BODY, REGULAR, file);
             require(NATIVE.unlinkat(directory, BODY, 0));
         }
@@ -106,7 +116,7 @@ final class PosixProfileStage extends ProfileStage {
         }
     }
 
-    private static void verifyNamedFile(int parent, byte[] name, int flags, int expected) throws IOException {
+    static void verifyNamedFile(int parent, byte[] name, int flags, int expected) throws IOException {
         int current = require(NATIVE.openat(parent, name, flags, 0));
         try (Closeable ignored = () -> closeFd(current)) {
             var before = POSIX_API.allocateStat();
@@ -126,7 +136,7 @@ final class PosixProfileStage extends ProfileStage {
         }
     }
 
-    private static void closeFd(int fd) throws IOException {
+    static void closeFd(int fd) throws IOException {
         if (fd >= 0) {
             require(POSIX_API.close(fd));
         }
@@ -139,7 +149,7 @@ final class PosixProfileStage extends ProfileStage {
         return result;
     }
 
-    private static int flags(OpenFlags... values) {
+    static int flags(OpenFlags... values) {
         int result = OpenFlags.O_CLOEXEC.intValue() | OpenFlags.O_NOFOLLOW.intValue();
         for (var value : values) {
             result |= value.intValue();
